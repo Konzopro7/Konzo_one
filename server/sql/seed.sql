@@ -1,0 +1,2 @@
+-- Seed file intentionally lightweight.
+-- Create your first account from the app login/register screen.

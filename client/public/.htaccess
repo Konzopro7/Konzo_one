@@ -1,0 +1,9 @@
+RewriteEngine On
+
+# Keep existing files and directories untouched.
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# SPA fallback for React Router.
+RewriteRule ^ index.html [L]

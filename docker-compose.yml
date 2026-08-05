@@ -1,0 +1,19 @@
+version: "3.9"
+services:
+  postgres:
+    image: postgres:16
+    container_name: konzotech-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: konzotech_saas
+      POSTGRES_USER: konzotech
+      POSTGRES_PASSWORD: konzotech123
+    ports:
+      - "5432:5432"
+    volumes:
+      - konzotech_pg_data:/var/lib/postgresql/data
+      - ./server/sql/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./server/sql/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+
+volumes:
+  konzotech_pg_data:

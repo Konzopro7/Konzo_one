@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Eye, Pencil, Trash2 } from "lucide-react";
+import { Eye, Pencil, Trash2, Search, Users, Plus } from "lucide-react";
 import toast from "react-hot-toast";
 import api from "../lib/api.js";
 import { formatCurrency, formatDate } from "../lib/format.js";
@@ -11,11 +11,12 @@ const initialForm = {
   name: "",
   company: "",
   email: "",
-  phone: ""
+  phone: "",
 };
 
 export default function ClientsPage() {
   const { isAdmin } = useAuth();
+  const [search, setSearch] = useState("");
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -26,6 +27,14 @@ export default function ClientsPage() {
   const [activeClientDetail, setActiveClientDetail] = useState(null);
 
   const isEditing = Boolean(activeClientId);
+  const normalizedSearch = search.trim().toLocaleLowerCase("fr");
+  const filteredClients = clients.filter((client) =>
+    [client.name, client.company, client.email, client.phone].some((value) =>
+      String(value || "")
+        .toLocaleLowerCase("fr")
+        .includes(normalizedSearch),
+    ),
+  );
 
   async function loadData() {
     const { data } = await api.get("/clients");
@@ -58,7 +67,7 @@ export default function ClientsPage() {
       name: client.name,
       company: client.company || "",
       email: client.email,
-      phone: client.phone || ""
+      phone: client.phone || "",
     });
     setModalOpen(true);
   }
@@ -121,16 +130,46 @@ export default function ClientsPage() {
       <section className="card">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="font-heading text-xl font-semibold text-slate-900">Gestion des clients</h2>
-            <p className="text-sm text-slate-500">Centralise infos, devis et factures par client.</p>
+            <h2 className="font-heading text-xl font-semibold text-slate-900">
+              Votre carnet de relations
+            </h2>
+            <p className="text-sm text-slate-500">
+              Coordonnées, documents et historique : chaque client a sa place.
+            </p>
           </div>
-          <button type="button" onClick={openCreateModal} className="btn-primary">
-            Ajouter un client
+          <button
+            type="button"
+            onClick={openCreateModal}
+            className="btn-primary gap-2"
+          >
+            <Plus size={16} /> Ajouter un client
           </button>
         </div>
       </section>
 
       <section className="card overflow-hidden">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+          <p className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <Users size={17} className="text-teal-600" />
+            Tous les clients{" "}
+            <span className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-500">
+              {loading ? "…" : clients.length}
+            </span>
+          </p>
+          <div className="relative w-full sm:w-80">
+            <Search
+              size={16}
+              className="absolute left-3 top-3.5 text-slate-400"
+            />
+            <input
+              className="field-input pl-10"
+              aria-label="Rechercher un client"
+              placeholder="Nom, entreprise, email…"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </div>
+        </div>
         {loading ? (
           <p className="text-sm text-slate-500">Chargement des clients...</p>
         ) : (
@@ -147,18 +186,29 @@ export default function ClientsPage() {
                 </tr>
               </thead>
               <tbody>
-                {clients.map((client) => (
-                  <tr key={client.id} className="border-b border-slate-100 last:border-0">
+                {filteredClients.map((client) => (
+                  <tr
+                    key={client.id}
+                    className="border-b border-slate-100 last:border-0"
+                  >
                     <td className="py-3">
-                      <p className="font-semibold text-slate-900">{client.name}</p>
-                      <p className="text-xs text-slate-500">{client.company || "Sans entreprise"}</p>
+                      <p className="font-semibold text-slate-900">
+                        {client.name}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {client.company || "Sans entreprise"}
+                      </p>
                     </td>
                     <td className="py-3 text-xs text-slate-600">
                       <p>{client.email}</p>
                       <p>{client.phone || "-"}</p>
                     </td>
-                    <td className="py-3 text-center font-semibold text-slate-800">{client.quotesCount}</td>
-                    <td className="py-3 text-center font-semibold text-slate-800">{client.invoicesCount}</td>
+                    <td className="py-3 text-center font-semibold text-slate-800">
+                      {client.quotesCount}
+                    </td>
+                    <td className="py-3 text-center font-semibold text-slate-800">
+                      {client.invoicesCount}
+                    </td>
                     <td className="py-3 text-right font-semibold text-brand-500">
                       {formatCurrency(client.paidTotal)}
                     </td>
@@ -199,9 +249,11 @@ export default function ClientsPage() {
           </div>
         )}
 
-        {!loading && clients.length === 0 && (
+        {!loading && filteredClients.length === 0 && (
           <div className="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
-            Aucun client pour le moment.
+            {search.trim()
+              ? "Aucun client ne correspond à votre recherche."
+              : "Votre prochaine relation commence ici. Ajoutez votre premier client."}
           </div>
         )}
       </section>
@@ -221,7 +273,7 @@ export default function ClientsPage() {
                 onChange={(event) =>
                   setForm((prev) => ({
                     ...prev,
-                    name: event.target.value
+                    name: event.target.value,
                   }))
                 }
                 required
@@ -235,7 +287,7 @@ export default function ClientsPage() {
                 onChange={(event) =>
                   setForm((prev) => ({
                     ...prev,
-                    company: event.target.value
+                    company: event.target.value,
                   }))
                 }
               />
@@ -249,7 +301,7 @@ export default function ClientsPage() {
                 onChange={(event) =>
                   setForm((prev) => ({
                     ...prev,
-                    email: event.target.value
+                    email: event.target.value,
                   }))
                 }
                 required
@@ -263,7 +315,7 @@ export default function ClientsPage() {
                 onChange={(event) =>
                   setForm((prev) => ({
                     ...prev,
-                    phone: event.target.value
+                    phone: event.target.value,
                   }))
                 }
               />
@@ -271,11 +323,19 @@ export default function ClientsPage() {
           </div>
 
           <div className="flex justify-end gap-2">
-            <button type="button" className="btn-secondary" onClick={closeModal}>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={closeModal}
+            >
               Annuler
             </button>
             <button type="submit" className="btn-primary" disabled={saving}>
-              {saving ? "Enregistrement..." : isEditing ? "Mettre à jour" : "Ajouter"}
+              {saving
+                ? "Enregistrement..."
+                : isEditing
+                  ? "Mettre à jour"
+                  : "Ajouter"}
             </button>
           </div>
         </form>
@@ -292,13 +352,19 @@ export default function ClientsPage() {
         {activeClientDetail ? (
           <div className="space-y-5">
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
-              <p className="font-semibold text-slate-900">{activeClientDetail.company || "Sans entreprise"}</p>
+              <p className="font-semibold text-slate-900">
+                {activeClientDetail.company || "Sans entreprise"}
+              </p>
               <p className="text-slate-600">{activeClientDetail.email}</p>
-              <p className="text-slate-600">{activeClientDetail.phone || "-"}</p>
+              <p className="text-slate-600">
+                {activeClientDetail.phone || "-"}
+              </p>
             </div>
 
             <div>
-              <h4 className="mb-2 font-heading text-base font-semibold text-slate-900">Devis</h4>
+              <h4 className="mb-2 font-heading text-base font-semibold text-slate-900">
+                Devis
+              </h4>
               <div className="space-y-2">
                 {activeClientDetail.quotes.map((quote) => (
                   <div
@@ -306,23 +372,33 @@ export default function ClientsPage() {
                     className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2"
                   >
                     <div>
-                      <p className="font-medium text-slate-800">{quote.quoteNumber}</p>
-                      <p className="text-xs text-slate-500">{formatDate(quote.issueDate)}</p>
+                      <p className="font-medium text-slate-800">
+                        {quote.quoteNumber}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {formatDate(quote.issueDate)}
+                      </p>
                     </div>
                     <div className="flex items-center gap-3">
                       <StatusBadge status={quote.status} />
-                      <span className="font-semibold text-slate-900">{formatCurrency(quote.total)}</span>
+                      <span className="font-semibold text-slate-900">
+                        {formatCurrency(quote.total)}
+                      </span>
                     </div>
                   </div>
                 ))}
                 {activeClientDetail.quotes.length === 0 && (
-                  <p className="text-sm text-slate-500">Aucun devis pour ce client.</p>
+                  <p className="text-sm text-slate-500">
+                    Aucun devis pour ce client.
+                  </p>
                 )}
               </div>
             </div>
 
             <div>
-              <h4 className="mb-2 font-heading text-base font-semibold text-slate-900">Factures</h4>
+              <h4 className="mb-2 font-heading text-base font-semibold text-slate-900">
+                Factures
+              </h4>
               <div className="space-y-2">
                 {activeClientDetail.invoices.map((invoice) => (
                   <div
@@ -330,19 +406,26 @@ export default function ClientsPage() {
                     className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2"
                   >
                     <div>
-                      <p className="font-medium text-slate-800">{invoice.invoiceNumber}</p>
+                      <p className="font-medium text-slate-800">
+                        {invoice.invoiceNumber}
+                      </p>
                       <p className="text-xs text-slate-500">
-                        {formatDate(invoice.issueDate)} - échéance {formatDate(invoice.dueDate)}
+                        {formatDate(invoice.issueDate)} - échéance{" "}
+                        {formatDate(invoice.dueDate)}
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
                       <StatusBadge status={invoice.status} />
-                      <span className="font-semibold text-slate-900">{formatCurrency(invoice.total)}</span>
+                      <span className="font-semibold text-slate-900">
+                        {formatCurrency(invoice.total)}
+                      </span>
                     </div>
                   </div>
                 ))}
                 {activeClientDetail.invoices.length === 0 && (
-                  <p className="text-sm text-slate-500">Aucune facture pour ce client.</p>
+                  <p className="text-sm text-slate-500">
+                    Aucune facture pour ce client.
+                  </p>
                 )}
               </div>
             </div>

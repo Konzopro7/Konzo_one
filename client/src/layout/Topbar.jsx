@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+import { navigation, canSee } from "./Sidebar.jsx";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Bell, Menu, Search } from "lucide-react";
 import toast from "react-hot-toast";
@@ -7,7 +9,7 @@ import { useAuth } from "../hooks/useAuth.jsx";
 const reminderTypeLabels = {
   invoice_due_soon: "Facture bientôt à échéance",
   invoice_overdue: "Facture en retard",
-  quote_followup: "Relance devis"
+  quote_followup: "Relance devis",
 };
 
 function formatReminderType(reminderType) {
@@ -23,12 +25,13 @@ function formatDate(value) {
     month: "short",
     day: "2-digit",
     hour: "2-digit",
-    minute: "2-digit"
+    minute: "2-digit",
   });
 }
 
 export default function Topbar({ onOpenSidebar }) {
   const { user } = useAuth();
+  const [search, setSearch] = useState("");
   const [panelOpen, setPanelOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState(null);
@@ -39,7 +42,7 @@ export default function Topbar({ onOpenSidebar }) {
       Number(summary?.invoiceDueSoonCount || 0) +
       Number(summary?.invoiceOverdueCount || 0) +
       Number(summary?.quoteFollowupCount || 0),
-    [summary]
+    [summary],
   );
 
   useEffect(() => {
@@ -75,7 +78,10 @@ export default function Topbar({ onOpenSidebar }) {
       const { data } = await api.get("/reminders/summary");
       setSummary(data);
     } catch (error) {
-      toast.error(error.response?.data?.message || "Impossible de charger les notifications.");
+      toast.error(
+        error.response?.data?.message ||
+          "Impossible de charger les notifications.",
+      );
     } finally {
       setLoading(false);
     }
@@ -95,18 +101,65 @@ export default function Topbar({ onOpenSidebar }) {
         <button
           type="button"
           onClick={onOpenSidebar}
+          aria-label="Ouvrir le menu"
           className="rounded-xl border border-slate-200 bg-white p-2 text-slate-700 shadow-sm lg:hidden"
         >
           <Menu size={18} />
         </button>
 
         <div className="relative hidden max-w-xl flex-1 sm:block">
-          <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search
+            size={16}
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+          />
           <input
             type="text"
-            placeholder="Rechercher un client, devis, facture..."
+            aria-label="Rechercher une page"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") setSearch("");
+            }}
+            placeholder="Accéder à une page…"
             className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-sm text-slate-700 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
           />
+          {search.trim() && (
+            <div className="absolute left-0 right-0 top-12 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+              {navigation
+                .flatMap((group) => group.items)
+                .filter(
+                  (item) =>
+                    canSee(item, user) &&
+                    item[1]
+                      .toLocaleLowerCase("fr")
+                      .includes(search.toLocaleLowerCase("fr")),
+                )
+                .map(([to, label, Icon]) => (
+                  <Link
+                    key={to}
+                    to={to}
+                    onClick={() => setSearch("")}
+                    className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50"
+                  >
+                    <Icon size={16} />
+                    {label}
+                  </Link>
+                ))}
+              {!navigation
+                .flatMap((group) => group.items)
+                .some(
+                  (item) =>
+                    canSee(item, user) &&
+                    item[1]
+                      .toLocaleLowerCase("fr")
+                      .includes(search.toLocaleLowerCase("fr")),
+                ) && (
+                <p className="p-3 text-sm text-slate-500">
+                  Aucune page trouvée.
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="ml-auto flex items-center gap-3">
@@ -123,17 +176,19 @@ export default function Topbar({ onOpenSidebar }) {
                 <span className="absolute right-0.5 top-0.5 min-w-4 rounded-full bg-red-500 px-1 text-center text-[10px] font-semibold leading-4 text-white">
                   {pendingCount > 99 ? "99+" : pendingCount}
                 </span>
-              ) : (
-                <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500" />
-              )}
+              ) : null}
             </button>
 
             {panelOpen ? (
-              <div className="absolute right-0 top-12 z-40 w-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
+              <div className="absolute right-0 top-12 z-40 w-[min(20rem,calc(100vw-2rem))] rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">Notifications</p>
-                    <p className="text-xs text-slate-500">Rappels et activité récente</p>
+                    <p className="text-sm font-semibold text-slate-900">
+                      Notifications
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      Rappels et activité récente
+                    </p>
                   </div>
                 </div>
 
@@ -145,13 +200,13 @@ export default function Topbar({ onOpenSidebar }) {
                   <>
                     <div className="grid grid-cols-3 gap-2">
                       <div className="rounded-xl border border-slate-200 bg-slate-50 px-2 py-2 text-center">
-                        <p className="text-[11px] text-slate-500">Due soon</p>
+                        <p className="text-[11px] text-slate-500">À venir</p>
                         <p className="text-sm font-semibold text-slate-800">
                           {summary?.invoiceDueSoonCount || 0}
                         </p>
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-slate-50 px-2 py-2 text-center">
-                        <p className="text-[11px] text-slate-500">Overdue</p>
+                        <p className="text-[11px] text-slate-500">En retard</p>
                         <p className="text-sm font-semibold text-rose-600">
                           {summary?.invoiceOverdueCount || 0}
                         </p>
@@ -166,7 +221,8 @@ export default function Topbar({ onOpenSidebar }) {
 
                     {!summary?.reminderEnabled ? (
                       <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-                        Les relances automatiques sont désactivées dans Paramètres.
+                        Les relances automatiques sont désactivées dans
+                        Paramètres.
                       </p>
                     ) : null}
 
@@ -187,7 +243,9 @@ export default function Topbar({ onOpenSidebar }) {
                             <p className="truncate text-xs text-slate-500">
                               {item.recipientEmail || "Sans destinataire"}
                             </p>
-                            <p className="text-[11px] text-slate-400">{formatDate(item.sentAt)}</p>
+                            <p className="text-[11px] text-slate-400">
+                              {formatDate(item.sentAt)}
+                            </p>
                           </div>
                         ))
                       )}
@@ -203,9 +261,12 @@ export default function Topbar({ onOpenSidebar }) {
               {(user?.fullName || "K").slice(0, 1).toUpperCase()}
             </div>
             <div>
-              <p className="text-sm font-semibold text-slate-800">{user?.fullName || "Admin"}</p>
+              <p className="text-sm font-semibold text-slate-800">
+                {user?.fullName || "Admin"}
+              </p>
               <p className="text-xs text-slate-500">
-                {user?.agencyName || "Konzotech Agency"} - {user?.role || "admin"}
+                {user?.agencyName || "Konzotech Agency"} -{" "}
+                {user?.role || "admin"}
               </p>
             </div>
           </div>

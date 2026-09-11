@@ -107,6 +107,17 @@ npm run dev
 - Stop API: `powershell -ExecutionPolicy Bypass -File scripts/local-stop-api.ps1`
 - Deploy frontend to XAMPP: `powershell -ExecutionPolicy Bypass -File scripts/local-deploy-xampp.ps1`
 
+## Workspace interface
+- Grouped navigation and page search in the top bar.
+- Client search by name, company, email, or phone.
+- Agency settings organized into Identity, Billing, Reminders, and Emails tabs.
+- Sandboxed email previews with fictional example data; HTML templates retain their variables.
+- Shared responsive styles for tables, forms, metrics, and the login page.
+
+Run `npm test` for server tests and isolated React component tests. Run
+`npm run build` for the frontend production build. Component tests mock the API
+and do not write agency data, send messages, or call payment services.
+
 ## Important V2 database note
 V2 schema changed significantly (agency model + reminders + Stripe fields).
 

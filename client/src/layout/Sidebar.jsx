@@ -1,147 +1,149 @@
 import {
-  Bell,
-  BookOpenText,
-  BriefcaseBusiness,
-  FileText,
-  GitBranch,
-  History,
   LayoutDashboard,
+  GitBranch,
+  FileText,
+  Receipt,
+  Users,
   MessageCircle,
+  BriefcaseBusiness,
   Boxes,
   ReceiptText,
-  Receipt,
+  BookOpenText,
   CreditCard,
-  Gauge,
   Settings,
   Shield,
-  Users,
-  X
+  History,
+  Gauge,
+  X,
+  LogOut,
+  ArrowUpRight,
+  Layers,
 } from "lucide-react";
-import { NavLink } from "react-router-dom";
+import { NavLink, Link } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth.jsx";
-
-const baseLinks = [
-  { to: "/dashboard", label: "Tableau de bord", icon: LayoutDashboard },
-  { to: "/pipeline", label: "Pipeline", icon: GitBranch },
-  { to: "/billing", label: "Abonnement", icon: CreditCard },
-  { to: "/quotes", label: "Devis", icon: FileText },
-  { to: "/invoices", label: "Factures", icon: Receipt },
-  { to: "/clients", label: "Clients", icon: Users },
-  { to: "/messages", label: "Messages", icon: MessageCircle },
-  { to: "/purchases", label: "Achats", icon: BriefcaseBusiness },
-  { to: "/inventory", label: "Stock", icon: Boxes },
-  { to: "/expenses", label: "Dépenses", icon: ReceiptText },
-  { to: "/ledger", label: "Grand livre", icon: BookOpenText }
+export const navigation = [
+  {
+    label: "Vue d’ensemble",
+    items: [["/dashboard", "Tableau de bord", LayoutDashboard]],
+  },
+  {
+    label: "Relation client",
+    items: [
+      ["/pipeline", "Pipeline", GitBranch],
+      ["/clients", "Clients", Users],
+      ["/quotes", "Devis", FileText],
+      ["/invoices", "Factures", Receipt],
+      ["/messages", "Messages", MessageCircle],
+    ],
+  },
+  {
+    label: "Finance & opérations",
+    items: [
+      ["/purchases", "Achats", BriefcaseBusiness],
+      ["/expenses", "Dépenses", ReceiptText],
+      ["/inventory", "Stock", Boxes],
+      ["/ledger", "Grand livre", BookOpenText],
+    ],
+  },
+  {
+    label: "Espace de travail",
+    items: [
+      ["/team", "Équipe", Shield, "admin"],
+      ["/activity", "Activité", History, "admin"],
+      ["/billing", "Abonnement", CreditCard],
+      ["/settings", "Paramètres", Settings],
+      ["/platform", "Admin SaaS", Gauge, "platform"],
+    ],
+  },
 ];
-
-function MenuLink({ to, label, icon: Icon, onNavigate }) {
+export function canSee(item, user) {
   return (
-    <NavLink
-      to={to}
-      onClick={onNavigate}
-      className={({ isActive }) =>
-        [
-          "group flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200",
-          isActive
-            ? "bg-white/20 text-white shadow-sm"
-            : "text-blue-100 hover:bg-white/10 hover:text-white"
-        ].join(" ")
-      }
-    >
-      <Icon size={18} className="opacity-90" />
-      <span>{label}</span>
-    </NavLink>
+    !item[3] ||
+    (item[3] === "admin" ? user?.role === "admin" : user?.isPlatformAdmin)
   );
 }
-
 export default function Sidebar({ open, onClose }) {
   const { user, logout } = useAuth();
-  const logoSrc = `${import.meta.env.BASE_URL}logo.svg`;
-  const links = [
-    ...baseLinks,
-    ...(user?.isPlatformAdmin
-      ? [{ to: "/platform", label: "Admin SaaS", icon: Gauge }]
-      : []),
-    ...(user?.role === "admin"
-      ? [{ to: "/team", label: "Équipe", icon: Shield }]
-      : []),
-    ...(user?.role === "admin"
-      ? [{ to: "/activity", label: "Activité", icon: History }]
-      : []),
-    { to: "/settings", label: "Paramètres", icon: Settings }
-  ];
-
   return (
     <>
-      <div
-        className={[
-          "fixed inset-0 z-30 bg-slate-900/45 backdrop-blur-sm transition-opacity lg:hidden",
-          open ? "opacity-100" : "pointer-events-none opacity-0"
-        ].join(" ")}
-        onClick={onClose}
-      />
-
-      <aside
-        className={[
-          "fixed inset-y-0 left-0 z-40 w-72 overflow-hidden border-r border-white/10",
-          "bg-gradient-to-b from-brand-500 via-brand-600 to-brand-900",
-          "transition-transform duration-300 lg:translate-x-0",
-          open ? "translate-x-0" : "-translate-x-full"
-        ].join(" ")}
-      >
-        <div className="flex h-full flex-col">
-          <div className="flex items-start justify-between border-b border-white/10 px-5 py-5">
-            <div className="flex items-center gap-3">
-              <img
-                src={logoSrc}
-                alt="Konzotech Agency"
-                width="36"
-                height="36"
-                className="h-9 w-9 rounded-lg object-contain"
-              />
-              <div>
-                <p className="font-heading text-sm tracking-wide text-white">KONZOTECH</p>
-                <p className="text-[10px] tracking-[0.32em] text-blue-100">AGENCY</p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg p-1 text-blue-100 hover:bg-white/10 hover:text-white lg:hidden"
-            >
-              <X size={18} />
-            </button>
+      {open && (
+        <button
+          className="fixed inset-0 z-30 bg-slate-950/40 backdrop-blur-sm lg:hidden"
+          aria-label="Fermer la navigation"
+          onClick={onClose}
+        />
+      )}
+      <aside className={`app-sidebar ${open ? "is-open" : ""}`}>
+        <Link to="/dashboard" className="sidebar-brand" onClick={onClose}>
+          <span className="brand-mark">
+            <Layers size={23} />
+          </span>
+          <span>
+            Konzotech<span className="brand-one">ONE · WORKSPACE</span>
+          </span>
+        </Link>
+        <button
+          className="absolute right-4 top-6 text-slate-400 lg:hidden"
+          onClick={onClose}
+          aria-label="Fermer le menu"
+        >
+          <X size={20} />
+        </button>
+        <div className="workspace-chip">
+          <span className="workspace-avatar">
+            {(user?.agencyName || "K").slice(0, 1).toUpperCase()}
+          </span>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-white">
+              {user?.agencyName || "Mon agence"}
+            </p>
+            <p className="mt-0.5 text-xs text-slate-400">
+              Espace professionnel
+            </p>
           </div>
-
-          <nav className="space-y-1 px-4 py-5">
-            {links.map((link) => (
-              <MenuLink
-                key={link.to}
-                to={link.to}
-                label={link.label}
-                icon={link.icon}
-                onNavigate={onClose}
-              />
-            ))}
-          </nav>
-
-          <div className="mt-auto border-t border-white/10 px-4 py-4">
-            <div className="mb-3 rounded-xl bg-white/10 px-3 py-2">
-              <p className="text-xs text-blue-100">Connecté en tant que</p>
-              <p className="mt-1 text-sm font-semibold text-white">{user?.fullName || "Admin"}</p>
-              <p className="truncate text-xs text-blue-100">{user?.email}</p>
-              <p className="text-xs uppercase tracking-wide text-blue-200">{user?.role}</p>
+        </div>
+        <nav className="sidebar-nav" aria-label="Navigation principale">
+          {navigation.map((group) => (
+            <div key={group.label} className="nav-group">
+              <p className="nav-group-label">{group.label}</p>
+              {group.items
+                .filter((item) => canSee(item, user))
+                .map(([to, label, Icon]) => (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    onClick={onClose}
+                    className={({ isActive }) =>
+                      `sidebar-link ${isActive ? "active" : ""}`
+                    }
+                  >
+                    <Icon size={17} strokeWidth={1.7} />
+                    <span>{label}</span>
+                  </NavLink>
+                ))}
             </div>
-
-            <button
-              type="button"
-              onClick={logout}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-sm font-semibold text-white transition hover:bg-white/20"
-            >
-              <Bell size={15} />
-              Déconnexion
-            </button>
-          </div>
+          ))}
+        </nav>
+        <div className="sidebar-footer">
+          <Link
+            to="/billing"
+            onClick={onClose}
+            className="flex items-center justify-between gap-2 text-xs text-slate-300"
+          >
+            <span>
+              Votre plan{" "}
+              <strong className="ml-1 uppercase text-teal-300">
+                {user?.subscription?.planTier || "pro"}
+              </strong>
+            </span>
+            <ArrowUpRight size={15} />
+          </Link>
+          <button
+            onClick={logout}
+            className="mt-4 flex items-center gap-2 text-xs text-slate-400 transition hover:text-white"
+          >
+            <LogOut size={15} /> Se déconnecter
+          </button>
         </div>
       </aside>
     </>

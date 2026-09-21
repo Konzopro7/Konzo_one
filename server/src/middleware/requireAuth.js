@@ -26,29 +26,30 @@ export async function requireAuth(req, res, next) {
   try {
     const payload = jwt.verify(token, getJwtSecret());
 
-    const user = {
-      id: payload.userId,
-      agencyId: payload.agencyId,
-      role: payload.role,
-      email: payload.email
-    };
-
-    // Backward compatibility for legacy tokens issued before V2.
-    if (!user.agencyId || !user.role) {
-      const { rows } = await query(
-        `SELECT agency_id, role
-         FROM users
-         WHERE id = $1`,
-        [user.id]
-      );
-
-      if (!rows[0]) {
-        return res.status(401).json({ message: "Invalid authentication token." });
-      }
-
-      user.agencyId = rows[0].agency_id;
-      user.role = rows[0].role;
+    if (!Number.isInteger(payload.userId) || payload.userId <= 0) {
+      return res.status(401).json({ message: "Invalid authentication token." });
     }
+
+    // Tokens identify a user; current database state controls their access.
+    // This also supports legacy tokens without embedded agency or role claims.
+    const accountRes = await query(
+      `SELECT id, agency_id, role, email, is_active
+       FROM users
+       WHERE id = $1`,
+      [payload.userId]
+    );
+    const account = accountRes.rows[0];
+    if (!account || !account.is_active ||
+        (payload.agencyId != null && payload.agencyId !== account.agency_id)) {
+      return res.status(401).json({ message: "Invalid authentication token." });
+    }
+
+    const user = {
+      id: account.id,
+      agencyId: account.agency_id,
+      role: account.role,
+      email: account.email
+    };
 
     const agencyRes = await query(
       `SELECT
@@ -111,6 +112,9 @@ export async function requireAuth(req, res, next) {
 
     return next();
   } catch (error) {
-    return res.status(401).json({ message: "Invalid or expired authentication token." });
+    if (["JsonWebTokenError", "TokenExpiredError", "NotBeforeError"].includes(error.name)) {
+      return res.status(401).json({ message: "Invalid or expired authentication token." });
+    }
+    return next(error);
   }
 }

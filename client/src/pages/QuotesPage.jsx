@@ -32,7 +32,7 @@ function normalizeQuoteForForm(quote) {
     clientId: String(quote.client.id),
     status: quote.status,
     validUntil: toInputDate(quote.validUntil),
-    taxRate: Number(quote.taxRate || 0.2),
+    taxRate: Number(quote.taxRate ?? 0.2),
     notes: quote.notes || "",
     items: quote.items.map((item) => ({
       description: item.description,

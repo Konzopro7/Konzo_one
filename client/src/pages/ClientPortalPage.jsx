@@ -62,7 +62,7 @@ export default function ClientPortalPage() {
     try {
       const { data } = await api.post(`/portal/quotes/${token}/accept`);
       toast.success(`Devis accepté. Facture ${data.invoiceNumber} prête.`);
-      window.location.assign(`/portal/invoices/${data.invoiceToken}`);
+      window.location.assign(`${import.meta.env.BASE_URL}portal/invoices/${data.invoiceToken}`);
     } catch (error) {
       toast.error(error.response?.data?.message || "Acceptation impossible.");
     } finally {

@@ -208,3 +208,19 @@ Le résultat recherché reste le même SaaS visuellement, enrichi par des change
 Après préparation et présentation de l’audit, le premier lot de phase 1 a été implémenté dans `middleware/requireAuth.js` : relecture du compte à chaque requête, rejet des comptes désactivés/supprimés, application du rôle et de l’email actuels, rejet d’un ancien jeton portant une autre agence, compatibilité avec les jetons historiques sans rôle/agence. Les erreurs de base passent désormais au gestionnaire serveur au lieu d’être assimilées à des identifiants invalides.
 
 Huit tests dédiés couvrent rétrogradation, désactivation, suppression, changement d’agence, compatibilité historique, panne de base, jeton invalide et expiration. Les 25 tests serveur/client passent. Ces tests utilisent un accès SQL simulé et ne modifient aucune base utilisateur. Aucun frontend, style, URL ou schéma SQL n’est modifié par ce lot. Le constat 3 est traité pour les contrôles d’accès à chaque requête ; la révocation explicite des sessions à la déconnexion reste une évolution distincte. Les autres constats restent ouverts, notamment les webhooks et les relations du pipeline.
+
+## 12. Deuxième lot — 22 septembre 2026
+
+Réalisé : signatures Stripe et WhatsApp obligatoires ; contrôle d’appartenance des quatre références du pipeline et jointures bornées par agence ; conversion prospect répétée sans nouveau client ; verrouillage de la conversion devis/facture et sérialisation de la numérotation par agence ; contrôle du statut et de l’expiration avant acceptation publique ; correction des totaux clients, des filtres SQL du grand livre, du taux zéro en édition et du basename du portail XAMPP. Les adresses de plateforme réservées ne peuvent plus être créées depuis l’inscription publique ou l’écran équipe. L’URL canonique du portail accepte `PUBLIC_CLIENT_URL` et ne concatène plus une liste d’origines.
+
+Paiement documentaire : un événement doit maintenant indiquer un paiement effectué en CAD, pour le montant exact et la session enregistrée, avant de solder une facture en attente. Les petits montants ne sont plus artificiellement augmentés au minimum de carte. Cela ne remplace pas encore le futur registre de paiements et d’événements : un paiement sur une ancienne session remplacée nécessite encore un rapprochement.
+
+Uploads : extension dérivée de la signature binaire, rejet des types incohérents et des nouveaux SVG actifs, restriction du logo aux images, en-têtes de protection pour les fichiers existants. Les anciens logos sont conservés. Le stockage privé et les permissions documentaires restent à implémenter ; les signatures binaires ne constituent pas un antivirus.
+
+Exploitation locale : script XAMPP interrompu si le build échoue, copie sans suppression miroir et configuration de réécriture pour les routes React. Apache et API démarrés pour les essais, relances automatiques désactivées pour ce processus local seulement.
+
+Validation : 38 tests unitaires/composants réussis, plus un test PostgreSQL réussi séparément sur tables temporaires avec rollback (ce dernier est optionnel via `TEST_DATABASE_URL`). Build standard et build `/konzotech-one/` réussis. Aucun changement CSS, logo, navigation ou schéma de données. Aucun paiement ou email réel utilisé pour ces tests.
+
+Configuration requise avant mise en service des webhooks : `STRIPE_WEBHOOK_SECRET` et `WHATSAPP_APP_SECRET` doivent contenir les secrets réels des fournisseurs. Sans configuration, les endpoints échouent volontairement avec 503. Aucun secret n’a été inventé ni ajouté au dépôt.
+
+Restent ouverts : synchronisation/idempotence complète des abonnements, registre des événements, fichiers privés, limitation des tentatives, logs expurgés, migrations outillées, relances fiables, permissions granulaires et développements fonctionnels des phases 2 à 10. Ce lot ne constitue pas la livraison complète du cahier des charges.

@@ -80,6 +80,9 @@ router.post("/register", async (req, res, next) => {
 
     const payload = parsed.data;
     const email = payload.email.trim().toLowerCase();
+    if (isPlatformAdminEmail(email)) {
+      return res.status(403).json({ message: "This account must be provisioned by the platform operator." });
+    }
 
     const user = await withTransaction(async (client) => {
       const exists = await client.query("SELECT id FROM users WHERE email = $1", [email]);

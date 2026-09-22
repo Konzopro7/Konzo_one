@@ -14,6 +14,6 @@ export function renderTemplate(template, variables = {}) {
 }
 
 export function buildPortalUrl(type, token) {
-  const clientUrl = (process.env.CLIENT_URL || "http://localhost:5173").replace(/\/+$/, "");
+  const clientUrl = (process.env.PUBLIC_CLIENT_URL || process.env.CLIENT_URL?.split(",")[0]?.trim() || "http://localhost:5173").replace(/\/+$/, "");
   return `${clientUrl}/portal/${type}/${token}`;
 }

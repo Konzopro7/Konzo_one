@@ -146,7 +146,7 @@ router.post("/quotes/:token/accept", async (req, res, next) => {
 
     await withTransaction(async (client) => {
       const quoteRes = await client.query(
-        `SELECT *
+        `SELECT *, (valid_until < CURRENT_DATE) AS is_expired
          FROM quotes
          WHERE public_token = $1
          FOR UPDATE`,
@@ -156,6 +156,12 @@ router.post("/quotes/:token/accept", async (req, res, next) => {
       if (!quote) {
         const error = new Error("Devis introuvable.");
         error.status = 404;
+        throw error;
+      }
+
+      if (!["sent", "accepted"].includes(quote.status) || (quote.status !== "accepted" && quote.is_expired)) {
+        const error = new Error("Ce devis ne peut plus ?tre accept?.");
+        error.status = 409;
         throw error;
       }
 

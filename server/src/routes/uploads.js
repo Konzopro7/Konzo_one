@@ -6,6 +6,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { requireRole } from "../middleware/requireRole.js";
+import { detectUploadType } from "../utils/uploadType.js";
 
 const router = Router();
 
@@ -23,23 +24,8 @@ const allowedMimeTypes = new Set([
   "image/png",
   "image/jpeg",
   "image/webp",
-  "image/svg+xml",
   "application/pdf"
 ]);
-
-function extensionFor(fileName, mimeType) {
-  const ext = path.extname(fileName).toLowerCase();
-  if (ext && /^[a-z0-9.]+$/i.test(ext)) {
-    return ext;
-  }
-
-  if (mimeType === "image/png") return ".png";
-  if (mimeType === "image/jpeg") return ".jpg";
-  if (mimeType === "image/webp") return ".webp";
-  if (mimeType === "image/svg+xml") return ".svg";
-  if (mimeType === "application/pdf") return ".pdf";
-  return ".bin";
-}
 
 router.use(requireAuth);
 
@@ -63,13 +49,16 @@ router.post("/", requireRole("admin", "commercial", "finance"), async (req, res,
       return res.status(400).json({ message: "Fichier vide ou supérieur à 5 Mo." });
     }
 
+    const detected = detectUploadType(buffer);
+    if (!detected || detected.mime !== payload.mimeType ||
+        (payload.purpose === "logo" && !detected.mime.startsWith("image/"))) {
+      return res.status(400).json({ message: "Format invalide. Utilisez PNG, JPEG, WebP ou PDF (documents uniquement)." });
+    }
+
     const agencyFolder = path.join(uploadRoot, String(req.user.agencyId), payload.purpose);
     await mkdir(agencyFolder, { recursive: true });
 
-    const fileName = `${Date.now()}-${crypto.randomBytes(8).toString("hex")}${extensionFor(
-      payload.fileName,
-      payload.mimeType
-    )}`;
+    const fileName = `${Date.now()}-${crypto.randomBytes(8).toString("hex")}${detected.extension}`;
     const fullPath = path.join(agencyFolder, fileName);
     await writeFile(fullPath, buffer);
 

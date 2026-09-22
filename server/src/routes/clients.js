@@ -31,14 +31,20 @@ router.get("/", async (req, res, next) => {
         c.phone,
         c.created_at,
         c.updated_at,
-        COUNT(DISTINCT q.id)::INT AS quotes_count,
-        COUNT(DISTINCT i.id)::INT AS invoices_count,
-        COALESCE(SUM(i.total) FILTER (WHERE i.status = 'paid'), 0)::NUMERIC(12, 2) AS paid_total
+        COALESCE(q.quotes_count, 0)::INT AS quotes_count,
+        COALESCE(i.invoices_count, 0)::INT AS invoices_count,
+        COALESCE(i.paid_total, 0)::NUMERIC(12, 2) AS paid_total
       FROM clients c
-      LEFT JOIN quotes q ON q.client_id = c.id
-      LEFT JOIN invoices i ON i.client_id = c.id
+      LEFT JOIN (
+        SELECT client_id, COUNT(*) AS quotes_count FROM quotes
+        WHERE agency_id = $1 GROUP BY client_id
+      ) q ON q.client_id = c.id
+      LEFT JOIN (
+        SELECT client_id, COUNT(*) AS invoices_count,
+          SUM(total) FILTER (WHERE status = 'paid') AS paid_total
+        FROM invoices WHERE agency_id = $1 GROUP BY client_id
+      ) i ON i.client_id = c.id
       WHERE c.agency_id = $1
-      GROUP BY c.id
       ORDER BY c.created_at DESC`,
       [req.user.agencyId]
     );

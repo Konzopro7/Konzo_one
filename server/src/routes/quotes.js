@@ -443,7 +443,7 @@ router.post("/:id/convert-to-invoice", requireRole("admin", "commercial"), async
           tax_amount,
           status
         FROM quotes
-        WHERE id = $1 AND agency_id = $2`,
+        WHERE id = $1 AND agency_id = $2 FOR UPDATE`,
         [id, req.user.agencyId]
       );
 

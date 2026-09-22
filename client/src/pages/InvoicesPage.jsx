@@ -28,7 +28,7 @@ function normalizeInvoiceForForm(invoice) {
     status: invoice.status,
     dueDate: toInputDate(invoice.dueDate),
     paymentMethod: invoice.paymentMethod || "",
-    taxRate: Number(invoice.taxRate || 0.2),
+    taxRate: Number(invoice.taxRate ?? 0.2),
     items: invoice.items.map((item) => ({
       description: item.description,
       unitPrice: Number(item.unitPrice),

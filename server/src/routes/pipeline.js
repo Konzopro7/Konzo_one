@@ -33,7 +33,7 @@ const opportunitySchema = z.object({
 
 function parseId(value) {
   const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
 function mapProspect(row) {
@@ -74,17 +74,31 @@ function mapOpportunity(row) {
   };
 }
 
+async function ownsOpportunityReferences(agencyId, payload) {
+  const { rows } = await query(
+    `SELECT
+      ($2::INT IS NULL OR EXISTS (SELECT 1 FROM prospects WHERE id = $2 AND agency_id = $1))
+      AND ($3::INT IS NULL OR EXISTS (SELECT 1 FROM clients WHERE id = $3 AND agency_id = $1))
+      AND ($4::INT IS NULL OR EXISTS (SELECT 1 FROM quotes WHERE id = $4 AND agency_id = $1))
+      AND ($5::INT IS NULL OR EXISTS (SELECT 1 FROM invoices WHERE id = $5 AND agency_id = $1)) AS allowed`,
+    [agencyId, payload.prospectId ?? null, payload.clientId ?? null, payload.quoteId ?? null, payload.invoiceId ?? null]
+  );
+  return rows[0]?.allowed === true;
+}
+
 async function fetchOpportunity(agencyId, id) {
   const { rows } = await query(
     `SELECT
       o.*,
+      p.id AS prospect_id,
+      c.id AS client_id,
       p.name AS prospect_name,
       p.company AS prospect_company,
       c.name AS client_name,
       c.company AS client_company
      FROM opportunities o
-     LEFT JOIN prospects p ON p.id = o.prospect_id
-     LEFT JOIN clients c ON c.id = o.client_id
+     LEFT JOIN prospects p ON p.id = o.prospect_id AND p.agency_id = o.agency_id
+     LEFT JOIN clients c ON c.id = o.client_id AND c.agency_id = o.agency_id
      WHERE o.id = $1 AND o.agency_id = $2`,
     [id, agencyId]
   );
@@ -237,6 +251,20 @@ router.post("/prospects/:id/convert-to-client", requireRole("admin", "commercial
         throw error;
       }
 
+      if (prospect.converted_client_id) {
+        const existing = await client.query(
+          "SELECT id FROM clients WHERE id = $1 AND agency_id = $2",
+          [prospect.converted_client_id, req.user.agencyId]
+        );
+        if (!existing.rows[0]) {
+          const error = new Error("Converted client not found.");
+          error.status = 409;
+          throw error;
+        }
+        clientId = existing.rows[0].id;
+        return;
+      }
+
       const created = await client.query(
         `INSERT INTO clients (agency_id, created_by, name, company, email, phone)
          VALUES ($1, $2, $3, $4, $5, $6)
@@ -286,13 +314,15 @@ router.get("/opportunities", async (req, res, next) => {
     const { rows } = await query(
       `SELECT
         o.*,
+      p.id AS prospect_id,
+      c.id AS client_id,
         p.name AS prospect_name,
         p.company AS prospect_company,
         c.name AS client_name,
         c.company AS client_company
        FROM opportunities o
-       LEFT JOIN prospects p ON p.id = o.prospect_id
-       LEFT JOIN clients c ON c.id = o.client_id
+       LEFT JOIN prospects p ON p.id = o.prospect_id AND p.agency_id = o.agency_id
+       LEFT JOIN clients c ON c.id = o.client_id AND c.agency_id = o.agency_id
        WHERE o.agency_id = $1
        ORDER BY o.created_at DESC`,
       [req.user.agencyId]
@@ -310,6 +340,9 @@ router.post("/opportunities", requireRole("admin", "commercial"), async (req, re
       return res.status(400).json({ message: "Validation failed.", issues: parsed.error.flatten() });
     }
     const p = parsed.data;
+    if (!(await ownsOpportunityReferences(req.user.agencyId, p))) {
+      return res.status(404).json({ message: "Related record not found." });
+    }
     const { rows } = await query(
       `INSERT INTO opportunities (
         agency_id, created_by, prospect_id, client_id, quote_id, invoice_id,
@@ -348,6 +381,9 @@ router.put("/opportunities/:id", requireRole("admin", "commercial"), async (req,
       return res.status(400).json({ message: "Validation failed.", issues: parsed.error.flatten() });
     }
     const p = parsed.data;
+    if (!(await ownsOpportunityReferences(req.user.agencyId, p))) {
+      return res.status(404).json({ message: "Related record not found." });
+    }
     const { rows } = await query(
       `UPDATE opportunities
        SET prospect_id = $1,

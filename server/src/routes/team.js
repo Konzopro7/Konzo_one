@@ -5,6 +5,8 @@ import { query } from "../db.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { requireRole } from "../middleware/requireRole.js";
 
+import { isPlatformAdminEmail } from "../utils/platformAdmin.js";
+
 const router = Router();
 
 router.use(requireAuth);
@@ -66,6 +68,9 @@ router.post("/", requireRole("admin"), async (req, res, next) => {
 
     const payload = parsed.data;
     const email = payload.email.trim().toLowerCase();
+    if (isPlatformAdminEmail(email)) {
+      return res.status(403).json({ message: "This account must be provisioned by the platform operator." });
+    }
     const exists = await query("SELECT id FROM users WHERE email = $1", [email]);
     if (exists.rows[0]) {
       return res.status(409).json({ message: "A user with this email already exists." });

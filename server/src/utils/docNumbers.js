@@ -21,6 +21,7 @@ function formatNumber(prefix, year, sequence) {
 }
 
 export async function generateQuoteNumber(client, agencyId) {
+  await client.query("SELECT id FROM agencies WHERE id = $1 FOR UPDATE", [agencyId]);
   const prefix = "DEV";
   const year = new Date().getFullYear();
   const pattern = `${prefix}-${year}-%`;
@@ -30,7 +31,7 @@ export async function generateQuoteNumber(client, agencyId) {
      FROM quotes
      WHERE agency_id = $1
        AND quote_number LIKE $2
-     ORDER BY quote_number DESC
+     ORDER BY CAST(SPLIT_PART(quote_number, '-', 3) AS INTEGER) DESC
      LIMIT 1
      FOR UPDATE`,
     [agencyId, pattern]
@@ -41,6 +42,7 @@ export async function generateQuoteNumber(client, agencyId) {
 }
 
 export async function generateInvoiceNumber(client, agencyId) {
+  await client.query("SELECT id FROM agencies WHERE id = $1 FOR UPDATE", [agencyId]);
   const prefix = "FAC";
   const year = new Date().getFullYear();
   const pattern = `${prefix}-${year}-%`;
@@ -50,7 +52,7 @@ export async function generateInvoiceNumber(client, agencyId) {
      FROM invoices
      WHERE agency_id = $1
        AND invoice_number LIKE $2
-     ORDER BY invoice_number DESC
+     ORDER BY CAST(SPLIT_PART(invoice_number, '-', 3) AS INTEGER) DESC
      LIMIT 1
      FOR UPDATE`,
     [agencyId, pattern]
@@ -61,6 +63,7 @@ export async function generateInvoiceNumber(client, agencyId) {
 }
 
 export async function generatePurchaseNumber(client, agencyId) {
+  await client.query("SELECT id FROM agencies WHERE id = $1 FOR UPDATE", [agencyId]);
   const prefix = "ACH";
   const year = new Date().getFullYear();
   const pattern = `${prefix}-${year}-%`;
@@ -70,7 +73,7 @@ export async function generatePurchaseNumber(client, agencyId) {
      FROM purchases
      WHERE agency_id = $1
        AND purchase_number LIKE $2
-     ORDER BY purchase_number DESC
+     ORDER BY CAST(SPLIT_PART(purchase_number, '-', 3) AS INTEGER) DESC
      LIMIT 1
      FOR UPDATE`,
     [agencyId, pattern]
@@ -81,6 +84,7 @@ export async function generatePurchaseNumber(client, agencyId) {
 }
 
 export async function generateExpenseNumber(client, agencyId) {
+  await client.query("SELECT id FROM agencies WHERE id = $1 FOR UPDATE", [agencyId]);
   const prefix = "DEP";
   const year = new Date().getFullYear();
   const pattern = `${prefix}-${year}-%`;
@@ -90,7 +94,7 @@ export async function generateExpenseNumber(client, agencyId) {
      FROM expenses
      WHERE agency_id = $1
        AND expense_number LIKE $2
-     ORDER BY expense_number DESC
+     ORDER BY CAST(SPLIT_PART(expense_number, '-', 3) AS INTEGER) DESC
      LIMIT 1
      FOR UPDATE`,
     [agencyId, pattern]

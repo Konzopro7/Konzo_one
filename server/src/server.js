@@ -61,8 +61,18 @@ app.post(
   handleStripeWebhook
 );
 
-app.use("/uploads", express.static(uploadRoot));
-app.use(express.json({ limit: "8mb" }));
+app.use("/uploads", express.static(uploadRoot, {
+  setHeaders(res) {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Content-Security-Policy", "sandbox; default-src 'none'; style-src 'unsafe-inline'");
+  }
+}));
+app.use(express.json({
+  limit: "8mb",
+  verify(req, res, buffer) {
+    if (req.path === "/api/chatbot/whatsapp/webhook") req.rawBody = buffer;
+  }
+}));
 app.use(requestLogger);
 
 app.get("/api/health", async (req, res) => {

@@ -28,7 +28,7 @@ function invoiceToLineItem(invoice, currency = "CAD") {
         name: `Invoice ${invoice.invoice_number}`,
         description: `Payment for ${invoice.invoice_number}`
       },
-      unit_amount: Math.max(50, Math.round(Number(invoice.total || 0) * 100))
+      unit_amount: Math.round(Number(invoice.total || 0) * 100)
     },
     quantity: 1
   };
@@ -113,6 +113,12 @@ async function createCheckoutSession({ invoice, currency, successUrl, cancelUrl 
     throw error;
   }
 
+  if (!Number.isFinite(Number(invoice.total)) || Number(invoice.total) < 0.5) {
+    const error = new Error("Invoice amount is below the supported card payment minimum.");
+    error.status = 400;
+    throw error;
+  }
+
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     payment_method_types: ["card"],
@@ -140,7 +146,8 @@ async function markInvoicePaidBySession(session) {
   const invoiceId = Number(session?.metadata?.invoiceId || 0);
   const agencyId = Number(session?.metadata?.agencyId || 0);
 
-  if (!invoiceId || !agencyId) {
+  if (!Number.isInteger(invoiceId) || invoiceId <= 0 || !Number.isInteger(agencyId) || agencyId <= 0 ||
+      session.payment_status !== "paid" || session.currency !== "cad" || !Number.isInteger(session.amount_total)) {
     return;
   }
 
@@ -151,8 +158,11 @@ async function markInvoicePaidBySession(session) {
          stripe_checkout_session_id = $1,
          stripe_payment_intent_id = $2
      WHERE id = $3
-       AND agency_id = $4`,
-    [session.id || null, session.payment_intent || null, invoiceId, agencyId]
+       AND agency_id = $4
+       AND ROUND(total * 100) = $5
+       AND status = 'pending'
+       AND stripe_checkout_session_id = $1`,
+    [session.id || null, session.payment_intent || null, invoiceId, agencyId, session.amount_total]
   );
 }
 
@@ -243,14 +253,18 @@ export async function handleStripeWebhook(req, res) {
     const signature = req.headers["stripe-signature"];
     let event;
 
+    if (!process.env.STRIPE_WEBHOOK_SECRET) {
+      return res.status(503).send("webhook_not_configured");
+    }
+    if (!signature) {
+      return res.status(400).send("signature_required");
+    }
     if (process.env.STRIPE_WEBHOOK_SECRET && signature) {
       event = stripe.webhooks.constructEvent(
         req.body,
         signature,
         process.env.STRIPE_WEBHOOK_SECRET
       );
-    } else {
-      event = JSON.parse(req.body.toString("utf8"));
     }
 
     if (event.type === "checkout.session.completed") {

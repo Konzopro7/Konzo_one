@@ -41,17 +41,17 @@ function buildWhereSql({ fromDate, toDate, entryType }) {
 
   if (fromDate) {
     params.push(fromDate);
-    clauses.push(`entry_date >= $${params.length}`);
+    clauses.push(`entry_date >= $${params.length + 1}`);
   }
 
   if (toDate) {
     params.push(toDate);
-    clauses.push(`entry_date <= $${params.length}`);
+    clauses.push(`entry_date <= $${params.length + 1}`);
   }
 
   if (entryType) {
     params.push(entryType);
-    clauses.push(`entry_type = $${params.length}`);
+    clauses.push(`entry_type = $${params.length + 1}`);
   }
 
   return {

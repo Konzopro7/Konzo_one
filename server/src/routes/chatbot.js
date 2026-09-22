@@ -4,6 +4,7 @@ import { z } from "zod";
 import { query, withTransaction } from "../db.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { requireRole } from "../middleware/requireRole.js";
+import { verifyWhatsappWebhook } from "../middleware/verifyWhatsappWebhook.js";
 import {
   extractInboundText,
   getWebhookUrl,
@@ -341,7 +342,7 @@ router.get("/whatsapp/webhook", async (req, res, next) => {
   }
 });
 
-router.post("/whatsapp/webhook", async (req, res, next) => {
+router.post("/whatsapp/webhook", verifyWhatsappWebhook, async (req, res, next) => {
   try {
     const entries = Array.isArray(req.body?.entry) ? req.body.entry : [];
 

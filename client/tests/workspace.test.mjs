@@ -19,7 +19,7 @@ await writeFile(
   `
 export function useAuth() { return globalThis.__workspaceTest.auth; }
 export const api = {
- get: async path => { if(globalThis.__workspaceTest.failLoad) throw Error('offline'); return {data: path === '/clients' ? globalThis.__workspaceTest.clients : globalThis.__workspaceTest.settings}; },
+ get: async path => { if(globalThis.__workspaceTest.failLoad) throw Error('offline'); return {data: path === '/clients' ? globalThis.__workspaceTest.clients : path.startsWith('/clients/') ? globalThis.__workspaceTest.clientDetail : globalThis.__workspaceTest.settings}; },
  put: async (path, data) => { globalThis.__workspaceTest.saved = {path, data}; return {data}; }
 };
 export const toast = { success() {}, error() {} };
@@ -199,6 +199,36 @@ test("client search filters by company and shows no-match feedback", async () =>
   act(() => search.props.onChange({ target: { value: "not-found" } }));
   assert.equal(ui.findByType("tbody").findAllByType("tr").length, 0);
   assert.match(JSON.stringify(view.toJSON()), /Aucun client ne correspond/);
+});
+
+test("contact editor loads the full profile and saves structured optional fields", async () => {
+  globalThis.__workspaceTest.clientDetail = {
+    id: 1, name: "Alice", email: "alice@example.invalid", company: "Studio Nord", phone: "",
+    city: "Montréal", preferredLanguage: "fr-CA", tags: ["PME"], notes: "À conserver"
+  };
+  const ui = await render(Clients);
+  await act(async () => ui.findAllByProps({ title: "Modifier" })[0].props.onClick());
+  assert.equal(ui.findByProps({ id: "contact-city" }).props.value, "Montréal");
+  act(() => ui.findByProps({ id: "contact-tags" }).props.onChange({ target: { value: "PME, Québec, PME" } }));
+  await act(async () => ui.findByType("form").props.onSubmit({ preventDefault() {} }));
+  assert.equal(globalThis.__workspaceTest.saved.path, "/clients/1");
+  assert.deepEqual(globalThis.__workspaceTest.saved.data.tags, ["PME", "Québec"]);
+  assert.equal(globalThis.__workspaceTest.saved.data.notes, "À conserver");
+});
+
+test("read-only users see client history but no create or edit controls", async () => {
+  globalThis.__workspaceTest.auth = { isAdmin: false, isCommercial: false, user: { role: "readonly" } };
+  const ui = await render(Clients);
+  assert.equal(ui.findAllByProps({ title: "Modifier" }).length, 0);
+  assert.equal(ui.findAllByProps({ title: "Historique" }).length, 2);
+  assert.ok(!JSON.stringify(view.toJSON()).includes("Ajouter un client"));
+});
+
+test("failed client load renders an error rather than an empty customer list", async () => {
+  globalThis.__workspaceTest.failLoad = true;
+  const ui = await render(Clients);
+  assert.equal(ui.findAllByProps({ role: "alert" }).length, 1);
+  assert.ok(!JSON.stringify(view.toJSON()).includes("Ajoutez votre premier client"));
 });
 test("sidebar keeps restricted sections hidden for read-only users", async () => {
   globalThis.__workspaceTest.auth = {

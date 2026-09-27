@@ -6,8 +6,10 @@ import { formatCurrency, formatDate } from "../lib/format.js";
 import Modal from "../components/Modal.jsx";
 import StatusBadge from "../components/StatusBadge.jsx";
 import { useAuth } from "../hooks/useAuth.jsx";
+import ContactFields, { ContactProfile, emptyContactProfile } from "../components/ContactFields.jsx";
 
 const initialForm = {
+  ...emptyContactProfile,
   name: "",
   company: "",
   email: "",
@@ -15,7 +17,8 @@ const initialForm = {
 };
 
 export default function ClientsPage() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, isCommercial } = useAuth();
+  const canWrite = isAdmin || isCommercial;
   const [search, setSearch] = useState("");
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -25,6 +28,7 @@ export default function ClientsPage() {
   const [form, setForm] = useState(initialForm);
   const [activeClientId, setActiveClientId] = useState(null);
   const [activeClientDetail, setActiveClientDetail] = useState(null);
+  const [loadError, setLoadError] = useState(false);
 
   const isEditing = Boolean(activeClientId);
   const normalizedSearch = search.trim().toLocaleLowerCase("fr");
@@ -39,12 +43,13 @@ export default function ClientsPage() {
   async function loadData() {
     const { data } = await api.get("/clients");
     setClients(data);
+    setLoadError(false);
   }
 
   useEffect(() => {
     let active = true;
     loadData()
-      .catch(() => toast.error("Impossible de charger les clients."))
+      .catch(() => { setLoadError(true); toast.error("Impossible de charger les clients."); })
       .finally(() => {
         if (active) {
           setLoading(false);
@@ -61,15 +66,15 @@ export default function ClientsPage() {
     setModalOpen(true);
   }
 
-  function openEditModal(client) {
-    setActiveClientId(client.id);
-    setForm({
-      name: client.name,
-      company: client.company || "",
-      email: client.email,
-      phone: client.phone || "",
-    });
-    setModalOpen(true);
+  async function openEditModal(client) {
+    try {
+      const { data } = await api.get(`/clients/${client.id}`);
+      setActiveClientId(client.id);
+      setForm({ ...initialForm, ...data, company: data.company || "", phone: data.phone || "", tags: (data.tags || []).join(", ") });
+      setModalOpen(true);
+    } catch {
+      toast.error("Impossible de charger le client. Réessayez.");
+    }
   }
 
   function closeModal() {
@@ -90,13 +95,20 @@ export default function ClientsPage() {
 
   async function handleSubmit(event) {
     event.preventDefault();
+    if (saving || !canWrite) return;
+    const tags = [...new Set(String(form.tags || "").split(",").map(tag => tag.trim()).filter(Boolean))];
+    if (tags.length > 30 || tags.some(tag => tag.length > 50)) {
+      toast.error("Utilisez au maximum 30 tags de 50 caractères chacun.");
+      return;
+    }
+    const payload = { ...form, tags, preferredLanguage: form.preferredLanguage || null, crmStatus: form.crmStatus || null };
     setSaving(true);
     try {
       if (isEditing) {
-        await api.put(`/clients/${activeClientId}`, form);
+        await api.put(`/clients/${activeClientId}`, payload);
         toast.success("Client mis à jour.");
       } else {
-        await api.post("/clients", form);
+        await api.post("/clients", payload);
         toast.success("Client ajouté.");
       }
       await loadData();
@@ -137,13 +149,13 @@ export default function ClientsPage() {
               Coordonnées, documents et historique : chaque client a sa place.
             </p>
           </div>
-          <button
+          {canWrite && <button
             type="button"
             onClick={openCreateModal}
             className="btn-primary gap-2"
           >
             <Plus size={16} /> Ajouter un client
-          </button>
+          </button>}
         </div>
       </section>
 
@@ -170,7 +182,9 @@ export default function ClientsPage() {
             />
           </div>
         </div>
-        {loading ? (
+        {loadError ? (
+          <p role="alert" className="text-sm text-slate-600">Impossible de charger les clients. <button className="btn-secondary" onClick={() => loadData().catch(() => setLoadError(true))}>Réessayer</button></p>
+        ) : loading ? (
           <p className="text-sm text-slate-500">Chargement des clients...</p>
         ) : (
           <div className="overflow-x-auto">
@@ -222,14 +236,14 @@ export default function ClientsPage() {
                         >
                           <Eye size={14} />
                         </button>
-                        <button
+                        {canWrite && <button
                           type="button"
                           className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50"
                           onClick={() => openEditModal(client)}
                           title="Modifier"
                         >
                           <Pencil size={14} />
-                        </button>
+                        </button>}
                         {isAdmin && (
                           <button
                             type="button"
@@ -249,7 +263,7 @@ export default function ClientsPage() {
           </div>
         )}
 
-        {!loading && filteredClients.length === 0 && (
+        {!loading && !loadError && filteredClients.length === 0 && (
           <div className="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
             {search.trim()
               ? "Aucun client ne correspond à votre recherche."
@@ -322,6 +336,8 @@ export default function ClientsPage() {
             </div>
           </div>
 
+          <ContactFields form={form} disabled={saving} onChange={(key, value) => setForm(prev => ({ ...prev, [key]: value }))} />
+
           <div className="flex justify-end gap-2">
             <button
               type="button"
@@ -360,6 +376,8 @@ export default function ClientsPage() {
                 {activeClientDetail.phone || "-"}
               </p>
             </div>
+
+            <ContactProfile client={activeClientDetail} />
 
             <div>
               <h4 className="mb-2 font-heading text-base font-semibold text-slate-900">

@@ -3,21 +3,23 @@ import { z } from "zod";
 import { query } from "../db.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { requireRole } from "../middleware/requireRole.js";
+import { contactProfileShape, mapContactProfile, suppliedProfile } from "../utils/contactProfile.js";
 
 const router = Router();
 
 router.use(requireAuth);
 
 const clientSchema = z.object({
-  name: z.string().min(2, "Name is required."),
-  company: z.string().optional(),
-  email: z.string().email("Invalid email."),
-  phone: z.string().optional()
+  name: z.string().trim().min(2, "Name is required.").max(150),
+  company: z.string().trim().max(180).optional(),
+  email: z.string().trim().email("Invalid email.").max(180),
+  phone: z.string().trim().max(60).optional(),
+  ...contactProfileShape
 });
 
 function parseId(value) {
   const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
 router.get("/", async (req, res, next) => {
@@ -75,7 +77,7 @@ router.get("/:id", async (req, res, next) => {
     }
 
     const clientRes = await query(
-      `SELECT id, name, company, email, phone, created_at, updated_at
+      `SELECT *
        FROM clients
        WHERE id = $1 AND agency_id = $2`,
       [id, req.user.agencyId]
@@ -104,6 +106,7 @@ router.get("/:id", async (req, res, next) => {
 
     const client = clientRes.rows[0];
     return res.json({
+      ...mapContactProfile(client),
       id: client.id,
       name: client.name,
       company: client.company,
@@ -143,22 +146,18 @@ router.post("/", requireRole("admin", "commercial"), async (req, res, next) => {
     }
 
     const payload = parsed.data;
+    const profile = suppliedProfile(payload);
+    const columns = ["agency_id", "created_by", "name", "company", "email", "phone", ...profile.map(([column]) => column)];
+    const values = [req.user.agencyId, req.user.id, payload.name, payload.company || null,
+      payload.email.toLowerCase(), payload.phone || null, ...profile.map(([, value]) => value)];
     const { rows } = await query(
-      `INSERT INTO clients (agency_id, created_by, name, company, email, phone)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, name, company, email, phone, created_at`,
-      [
-        req.user.agencyId,
-        req.user.id,
-        payload.name.trim(),
-        payload.company?.trim() || null,
-        payload.email.trim().toLowerCase(),
-        payload.phone?.trim() || null
-      ]
+      `INSERT INTO clients (${columns.join(", ")})
+       VALUES (${values.map((_, index) => `$${index + 1}`).join(", ")}) RETURNING *`, values
     );
 
     const client = rows[0];
     return res.status(201).json({
+      ...mapContactProfile(client),
       id: client.id,
       name: client.name,
       company: client.company,
@@ -187,22 +186,15 @@ router.put("/:id", requireRole("admin", "commercial"), async (req, res, next) =>
     }
 
     const payload = parsed.data;
+    const fields = [["name", payload.name], ["company", payload.company || null],
+      ["email", payload.email.toLowerCase()], ["phone", payload.phone || null], ...suppliedProfile(payload)];
+    const values = fields.map(([, value]) => value);
+    values.push(id, req.user.agencyId);
     const { rows } = await query(
       `UPDATE clients
-       SET name = $1,
-           company = $2,
-           email = $3,
-           phone = $4
-       WHERE id = $5 AND agency_id = $6
-       RETURNING id, name, company, email, phone, updated_at`,
-      [
-        payload.name.trim(),
-        payload.company?.trim() || null,
-        payload.email.trim().toLowerCase(),
-        payload.phone?.trim() || null,
-        id,
-        req.user.agencyId
-      ]
+       SET ${fields.map(([column], index) => `${column} = $${index + 1}`).join(", ")}
+       WHERE id = $${values.length - 1} AND agency_id = $${values.length}
+       RETURNING *`, values
     );
 
     if (!rows[0]) {
@@ -210,6 +202,7 @@ router.put("/:id", requireRole("admin", "commercial"), async (req, res, next) =>
     }
 
     return res.json({
+      ...mapContactProfile(rows[0]),
       id: rows[0].id,
       name: rows[0].name,
       company: rows[0].company,

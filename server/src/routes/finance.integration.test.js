@@ -4,6 +4,7 @@ import pg from "pg";
 import pool from "../db.js";
 import clients from "./clients.js";
 import ledger from "./ledger.js";
+import { readFile } from "node:fs/promises";
 
 // Opt-in only. Fixtures are TEMP tables and the transaction is always rolled back.
 test("PostgreSQL: client totals and filtered ledger remain tenant scoped", { skip: !process.env.TEST_DATABASE_URL }, async t => {
@@ -38,6 +39,26 @@ test("PostgreSQL: client totals and filtered ledger remain tenant scoped", { ski
     assert.equal(filtered.length, 1);
     assert.equal(filtered[0].amount, 100);
     assert.deepEqual(await get(ledger, "/entries", { from: "2026-10-01" }), []);
+
+    const migration = await readFile(new URL("../../sql/migrations/2026-09-22-contact-details.sql", import.meta.url), "utf8");
+    await db.query(migration);
+    await db.query(migration);
+    const update = clients.stack.find(layer => layer.route?.path === "/:id" && layer.route.methods.put).route.stack.at(-1).handle;
+    async function put(id, body) {
+      const res = { statusCode: 200, status(code) { this.statusCode = code; return this; }, json(value) { this.body = value; return this; } };
+      await update({ user: { agencyId: 10 }, params: { id: String(id) }, body }, res, error => { throw error; });
+      return res;
+    }
+    const legacy = { name: "Client A", email: "a@example.test", company: "Entreprise A", phone: "514-555-0100" };
+    const enriched = await put(1, { ...legacy, firstName: "Camille", city: "Montréal", preferredLanguage: "fr-CA", tags: ["PME", "PME"], notes: "Historique à conserver" });
+    assert.equal(enriched.body.city, "Montréal");
+    assert.deepEqual(enriched.body.tags, ["PME"]);
+    const olderConsumer = await put(1, { ...legacy, phone: "514-555-0101" });
+    assert.equal(olderConsumer.body.notes, "Historique à conserver");
+    assert.equal(olderConsumer.body.city, "Montréal");
+    assert.equal((await put(2, { ...legacy, notes: "Forbidden" })).statusCode, 404);
+    assert.equal((await put(1, { ...legacy, preferredLanguage: "unknown" })).statusCode, 400);
+    assert.equal((await db.query("SELECT COUNT(*)::INT AS count FROM clients")).rows[0].count, 2);
   } finally {
     await db.query("ROLLBACK");
     await db.end();

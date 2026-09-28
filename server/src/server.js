@@ -136,8 +136,8 @@ app.use((error, req, res, next) => {
   });
 });
 
+await startSubscriptionExpiryScheduler();
 app.listen(port, process.env.HOST || "0.0.0.0", () => {
-  startSubscriptionExpiryScheduler();
   startReminderScheduler();
   console.log(`${PRODUCT_NAME} API running on http://localhost:${port}`);
 });

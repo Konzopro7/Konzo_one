@@ -17,13 +17,11 @@ export async function expireTrials(agencyId = null) {
 
 export async function startSubscriptionExpiryScheduler() {
   const sweep = async () => {
-    try {
       const count = await expireTrials();
       if (count) console.log(`[subscriptions] expired_trials=${count}`);
-    } catch (error) {
-      console.error("[subscriptions] expiry sweep failed", error.message);
-    }
   };
   await sweep();
-  return cron.schedule("* * * * *", sweep);
+  return cron.schedule("* * * * *", () => sweep().catch(error => {
+    console.error("[subscriptions] expiry sweep failed", error.message);
+  }));
 }

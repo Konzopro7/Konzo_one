@@ -150,11 +150,11 @@ export default function BillingPage() {
     }
   }
 
-  async function openBillingPortal() {
+  async function openBillingPortal(action = 'manage') {
     if (!isAdmin || processingPlan) return;
-    setProcessingPlan('portal');
+    setProcessingPlan(action === 'cancel' ? 'cancel' : 'portal');
     try {
-      const { data } = await api.post('/billing/portal-session');
+      const { data } = await api.post('/billing/portal-session', { action });
       window.location.assign(data.portalUrl);
     } catch (error) {
       toast.error(error.response?.data?.message || 'Le portail de facturation est indisponible.');
@@ -172,7 +172,21 @@ export default function BillingPage() {
   return (
     <div className="space-y-5">
       {status?.stripeTestMode && <section className="card"><p role="status" className="text-sm text-amber-700">Stripe est en mode test. Les paiements sont simulés et aucun montant réel n’est encaissé.</p></section>}
-      {isAdmin && status?.subscription?.stripeCustomerId && <section className="card"><button type="button" className="btn-secondary" disabled={Boolean(processingPlan)} onClick={openBillingPortal}>Gérer ma facturation Stripe</button></section>}
+      {isAdmin && status?.subscription?.stripeCustomerId && (
+        <section className="card">
+          <div className="flex flex-wrap gap-3">
+            <button type="button" className="btn-secondary" disabled={Boolean(processingPlan)} onClick={() => openBillingPortal()}>Gérer ma facturation Stripe</button>
+            {status.subscription.stripeSubscriptionId && subscriptionStatus !== 'canceled' && (
+              <button type="button" className="btn-secondary" disabled={Boolean(processingPlan)} onClick={() => openBillingPortal('cancel')}>
+                {processingPlan === 'cancel' ? 'Redirection...' : 'Annuler mon abonnement'}
+              </button>
+            )}
+          </div>
+          {status.subscription.stripeSubscriptionId && subscriptionStatus !== 'canceled' && (
+            <p className="mt-3 text-sm text-slate-500">L’annulation se confirme sur Stripe. Le renouvellement automatique sera arrêté et votre accès sera conservé jusqu’à la fin de la période en cours. Vos données restent conservées.</p>
+          )}
+        </section>
+      )}
       <section className="card">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -255,7 +269,7 @@ export default function BillingPage() {
             className="btn-primary mt-5 w-full"
             disabled={
               !isAdmin ||
-              processingPlan === "pro" ||
+              Boolean(processingPlan) ||
               (subscriptionStatus === "active" && currentPlan === "pro")
             }
             onClick={() => startPlanCheckout("pro")}
@@ -291,7 +305,7 @@ export default function BillingPage() {
             className="btn-primary mt-5 w-full"
             disabled={
               !isAdmin ||
-              processingPlan === "premium" ||
+              Boolean(processingPlan) ||
               (subscriptionStatus === "active" && currentPlan === "premium")
             }
             onClick={() => startPlanCheckout("premium")}

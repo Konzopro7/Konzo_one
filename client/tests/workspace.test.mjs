@@ -94,6 +94,32 @@ const { default: PasswordRecovery } = await import(pathToFileURL(await compile(p
 const {default: AdminWorkspaces}=await import(pathToFileURL(await compile(path.join(root,"src/components/AdminWorkspaces.jsx"))));
 const {default: AnalyticsConsent}=await import(pathToFileURL(await compile(path.join(root,"src/components/AnalyticsConsent.jsx"))));
 const {default: GoogleAnalyticsPanel}=await import(pathToFileURL(await compile(path.join(root,"src/components/GoogleAnalyticsPanel.jsx"))));
+const {default: Billing}=await import(pathToFileURL(await compile(path.join(root,"src/pages/BillingPage.jsx"))));
+
+test('billing cancellation opens the dedicated confirmation flow and recovers from server errors', async () => {
+  globalThis.__workspaceTest.responses = { '/billing/status': { subscription: { subscriptionStatus: 'active', stripeCustomerId: 'cus_fixture', stripeSubscriptionId: 'sub_fixture' } } };
+  globalThis.__workspaceTest.failPost = true;
+  const ui = await render(Billing);
+  const cancel = () => ui.findAllByType('button').find(b => b.children.includes('Annuler mon abonnement'));
+  assert.ok(cancel());
+  await act(async () => cancel().props.onClick());
+  assert.deepEqual(globalThis.__workspaceTest.posted, { path: '/billing/portal-session', data: { action: 'cancel' } });
+  assert.equal(cancel().props.disabled, false);
+});
+
+test('billing cancellation is hidden for employees, ended subscriptions and free trials without Stripe', async () => {
+  for (const [isAdmin, subscription] of [
+    [false, { subscriptionStatus: 'active', stripeCustomerId: 'cus_fixture', stripeSubscriptionId: 'sub_fixture' }],
+    [true, { subscriptionStatus: 'canceled', stripeCustomerId: 'cus_fixture', stripeSubscriptionId: 'sub_fixture' }],
+    [true, { subscriptionStatus: 'trial' }]
+  ]) {
+    globalThis.__workspaceTest.auth.isAdmin = isAdmin;
+    globalThis.__workspaceTest.responses = { '/billing/status': { subscription } };
+    const ui = await render(Billing);
+    assert.equal(ui.findAllByType('button').some(b => b.children.includes('Annuler mon abonnement')), false);
+    act(() => view.unmount());
+  }
+});
 let view;
 async function render(Component, props = {}, initialEntries = ["/"]) {
   await act(async () => {

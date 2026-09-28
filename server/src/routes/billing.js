@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { getStripeClient, stripeTestMode } from "../services/stripeClient.js";
 import { confirmStripeCheckout } from "../services/stripeSubscriptions.js";
+import { createBillingPortalSession } from "../services/billingPortal.js";
 import { query } from "../db.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { requireRole } from "../middleware/requireRole.js";
@@ -266,16 +267,15 @@ router.post("/confirm-checkout", requireRole("admin"), async (req, res, next) =>
 
 router.post("/portal-session", requireRole("admin"), async (req, res, next) => {
   try {
-    const stripe = getStripeClient();
+    const parsed = z.object({ action: z.enum(['manage', 'cancel']).default('manage') }).strict().safeParse(req.body || {});
+    if (!parsed.success) return res.status(400).json({ message: "Action de facturation invalide." });
     const agency = await fetchAgencySubscription(req.user.agencyId);
-    if (!stripe || !agency?.stripe_customer_id) return res.status(409).json({ message: "Aucun compte de facturation Stripe disponible." });
-    const session = await stripe.billingPortal.sessions.create({
-      customer: agency.stripe_customer_id,
-      return_url: `${process.env.PUBLIC_CLIENT_URL || "http://localhost:5173"}/billing`,
-      ...(process.env.STRIPE_PORTAL_CONFIGURATION ? { configuration: process.env.STRIPE_PORTAL_CONFIGURATION } : {})
-    });
+    const session = await createBillingPortalSession(agency, { cancel: parsed.data.action === 'cancel' });
     return res.json({ portalUrl: session.url });
-  } catch (error) { return next(error); }
+  } catch (error) {
+    if (error.status === 409) return res.status(409).json({ message: error.message });
+    return next(error);
+  }
 });
 
 router.post("/simulate-cancel", requireRole("admin"), async (req, res, next) => {

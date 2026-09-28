@@ -47,6 +47,18 @@ La page de facturation annonce explicitement le mode test. Aucune somme réelle
 n'est encaissée avec ces clés. Pour tester un paiement, utiliser les données de
 carte proposées dans la documentation Stripe, jamais une carte réelle.
 
+## Annulation par le client
+
+Dans Abonnement, l’administrateur de l’entreprise dispose du bouton « Annuler
+mon abonnement ». Il ouvre directement la confirmation Stripe, sans annuler
+l’abonnement au clic. Le serveur utilise uniquement les identifiants Stripe
+de l’entreprise authentifiée, vérifie leur correspondance et refuse une
+configuration de portail qui ne prévoit pas l’annulation en fin de période.
+Stripe conserve l’abonnement actif jusqu’à cette date ; les webhooks existants
+actualisent ensuite son statut. Les données CRM ne sont pas supprimées.
+Les essais gratuits sans abonnement Stripe se terminent automatiquement et
+ne nécessitent pas d’annulation de prélèvement.
+
 ## Passage futur en mode réel
 
 Configurer explicitement les clés, produits/prix et webhook du mode réel.

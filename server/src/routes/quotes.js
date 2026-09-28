@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from "../../../shared/brand.mjs";
 import crypto from "crypto";
 import { Router } from "express";
 import { z } from "zod";
@@ -644,7 +645,7 @@ router.post("/:id/send-email", requireRole("admin", "commercial"), async (req, r
     const token = await ensureQuoteToken(id, req.user.agencyId);
     const portalUrl = buildPortalUrl("quotes", token);
     const variables = {
-      agencyName: settings?.agency_name || "Konzotech Agency",
+      agencyName: settings?.agency_name || PRODUCT_NAME,
       clientName: quote.client.name,
       documentNumber: quote.quoteNumber,
       total: String(quote.total),

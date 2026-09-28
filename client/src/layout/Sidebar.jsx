@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from "../../../shared/brand.mjs";
 import {
   LayoutDashboard,
   GitBranch,
@@ -79,7 +80,7 @@ export default function Sidebar({ open, onClose }) {
             <Layers size={23} />
           </span>
           <span>
-            Konzotech<span className="brand-one">ONE · WORKSPACE</span>
+            {PRODUCT_NAME}<span className="brand-one">ESPACE DE TRAVAIL</span>
           </span>
         </Link>
         <button

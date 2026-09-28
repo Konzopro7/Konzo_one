@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from "../../../shared/brand.mjs";
 import { Outlet, useLocation } from "react-router-dom";
 import { useMemo, useState } from "react";
 import Sidebar from "./Sidebar.jsx";
@@ -38,7 +39,7 @@ export default function AppLayout() {
   const location = useLocation();
 
   const title = useMemo(
-    () => pageTitles[location.pathname] || "Konzotech One",
+    () => pageTitles[location.pathname] || PRODUCT_NAME,
     [location.pathname],
   );
 

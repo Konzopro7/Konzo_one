@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from "../../../shared/brand.mjs";
 import cron from "node-cron";
 import { query } from "../db.js";
 import { sendEmail } from "./mailer.js";
@@ -32,7 +33,7 @@ function invoiceBody({ reminderType, clientName, invoiceNumber, dueDate, total, 
       <strong>Due date:</strong> ${dueLabel}<br/>
       <strong>Amount:</strong> ${amount}</p>
       <p>Please contact us if you already processed the payment.</p>
-      <p>Best regards,<br/>${agencyName || "Konzotech Agency"}</p>
+      <p>Best regards,<br/>${agencyName || PRODUCT_NAME}</p>
     </div>
   `;
 }
@@ -49,7 +50,7 @@ function quoteBody({ clientName, quoteNumber, total, currency, agencyName }) {
       <p>We wanted to follow up regarding your quote <strong>${quoteNumber}</strong>.</p>
       <p>Total proposal amount: <strong>${amount}</strong>.</p>
       <p>Let us know if you need any adjustments to proceed.</p>
-      <p>Best regards,<br/>${agencyName || "Konzotech Agency"}</p>
+      <p>Best regards,<br/>${agencyName || PRODUCT_NAME}</p>
     </div>
   `;
 }

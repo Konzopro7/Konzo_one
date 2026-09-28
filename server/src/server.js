@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from "../../shared/brand.mjs";
 import dotenv from "dotenv";
 import express from "express";
 import cors from "cors";
@@ -129,5 +130,5 @@ app.use((error, req, res, next) => {
 
 app.listen(port, () => {
   startReminderScheduler();
-  console.log(`Konzotech API running on http://localhost:${port}`);
+  console.log(`${PRODUCT_NAME} API running on http://localhost:${port}`);
 });

@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from "../../../shared/brand.mjs";
 import { Check, Rocket, ShieldCheck, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 import { formatCurrency } from "../lib/format.js";
@@ -85,13 +86,13 @@ export default function PricingPage() {
           <div className="flex items-center gap-3">
             <img
               src={logoSrc}
-              alt="Konzotech Agency"
+              alt={PRODUCT_NAME}
               width="40"
               height="40"
               className="h-10 w-10 rounded-xl object-contain"
             />
             <div>
-              <p className="font-heading text-sm tracking-wide text-slate-900">KONZOTECH ONE</p>
+              <p className="font-heading text-sm tracking-wide text-slate-900">{PRODUCT_NAME}</p>
               <p className="text-[11px] tracking-[0.26em] text-slate-500">DIGITAL OS</p>
             </div>
           </div>

@@ -224,3 +224,19 @@ Validation : 38 tests unitaires/composants réussis, plus un test PostgreSQL ré
 Configuration requise avant mise en service des webhooks : `STRIPE_WEBHOOK_SECRET` et `WHATSAPP_APP_SECRET` doivent contenir les secrets réels des fournisseurs. Sans configuration, les endpoints échouent volontairement avec 503. Aucun secret n’a été inventé ni ajouté au dépôt.
 
 Restent ouverts : synchronisation/idempotence complète des abonnements, registre des événements, fichiers privés, limitation des tentatives, logs expurgés, migrations outillées, relances fiables, permissions granulaires et développements fonctionnels des phases 2 à 10. Ce lot ne constitue pas la livraison complète du cahier des charges.
+
+## 13. Contacts et suivi des migrations
+
+Le registre `clients` est enrichi de prénom, nom de famille, fonction, second téléphone, adresse, ville, province, code postal, pays, langue préférée, source, statut CRM, tags et notes. Les informations sont accessibles dans le formulaire et l’historique existants, avec les classes visuelles actuelles. Les champs absents d’un ancien appel API restent conservés. Les contrôles de création/édition sont masqués pour les rôles sans droit d’écriture, en complément des permissions serveur. Une erreur de chargement affiche un message distinct de la liste vide.
+
+Le runner de migrations enregistre noms/checksums, vérifie le schéma historique avant baseline, utilise un verrou et une transaction, et propose `--dry-run` avec rollback. Il ne rejoue pas les migrations historiques, notamment celle qui imposait CAD. Une sauvegarde locale a été créée avant application ; l’archive est lisible, sans prétendre avoir effectué une restauration complète. La migration contacts a été appliquée sur PostgreSQL local et les empreintes des anciennes colonnes/lignes clients sont identiques avant/après. Une seconde exécution ne modifie rien.
+
+Tests ajoutés : édition complète du contact, conservation des champs, validation des tags/langues, refus d’écriture inter-agences, état d’erreur, contrôle des migrations modifiées et rollback. Le test PostgreSQL a été exécuté séparément sur tables temporaires, avec application répétée de la migration. Entreprises relationnelles, responsables et timeline métier restent à ajouter ; ce lot ne constitue pas une vue client 360° complète.
+
+## 14. Renommage — 27 septembre 2026
+
+Le produit s’appelle désormais **konzoCRM.com**. Son identité textuelle est centralisée dans `shared/brand.mjs`, réutilisée côté client/serveur ; titre HTML, connexion, sidebar, tarification et valeurs de repli ont été actualisés. Les noms des agences en base restent inchangés. Logos, CSS, palette et structure de navigation sont conservés.
+
+README réorganisé et guides d’architecture/exploitation ajoutés. Les exemples de production visent `konzocrm.com` et `api.konzocrm.com` ; aucun DNS, certificat, compte SMTP ou callback externe n’a été modifié. Les identifiants PostgreSQL/Docker/npm, le dépôt GitHub et le chemin local historique restent compatibles.
+
+Validation : 44 tests unitaires/composants réussis, un test PostgreSQL exécuté séparément et réussi, builds standard et XAMPP. L’outil navigateur ne dispose d’aucun navigateur connecté ; aucune validation visuelle manuelle n’est revendiquée. Les phases métier restantes sont toujours ouvertes.

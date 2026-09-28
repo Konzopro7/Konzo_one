@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from "../../../shared/brand.mjs";
 import {
   Building2,
   CreditCard,
@@ -18,7 +19,7 @@ import { useAuth } from "../hooks/useAuth.jsx";
 
 const initialSettings = {
   logoUrl: "",
-  agencyName: "Konzotech Agency",
+  agencyName: PRODUCT_NAME,
   agencyEmail: "",
   agencyPhone: "",
   paymentTerms: "Paiement sous 15 jours.",

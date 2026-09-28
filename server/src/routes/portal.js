@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from "../../../shared/brand.mjs";
 import crypto from "crypto";
 import { Router } from "express";
 import { query, withTransaction } from "../db.js";
@@ -127,7 +128,7 @@ router.get("/quotes/:token", async (req, res, next) => {
       type: "quote",
       quote,
       agency: {
-        name: settings?.agency_name || "Konzotech Agency",
+        name: settings?.agency_name || PRODUCT_NAME,
         email: settings?.agency_email || null,
         phone: settings?.agency_phone || null,
         logoUrl: settings?.logo_url || null,
@@ -270,7 +271,7 @@ router.get("/invoices/:token", async (req, res, next) => {
       type: "invoice",
       invoice,
       agency: {
-        name: settings?.agency_name || "Konzotech Agency",
+        name: settings?.agency_name || PRODUCT_NAME,
         email: settings?.agency_email || null,
         phone: settings?.agency_phone || null,
         logoUrl: settings?.logo_url || null,

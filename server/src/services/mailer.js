@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from "../../../shared/brand.mjs";
 import nodemailer from "nodemailer";
 
 let transporter;
@@ -41,7 +42,7 @@ export async function sendDocumentByEmail({
 }) {
   const tx = createTransporter();
   const info = await tx.sendMail({
-    from: process.env.SMTP_FROM || "Konzotech Agency <no-reply@konzotech.agency>",
+    from: process.env.SMTP_FROM || `${PRODUCT_NAME} <no-reply@konzotech.agency>`,
     to,
     subject,
     html,
@@ -64,7 +65,7 @@ export async function sendDocumentByEmail({
 export async function sendEmail({ to, subject, html }) {
   const tx = createTransporter();
   const info = await tx.sendMail({
-    from: process.env.SMTP_FROM || "Konzotech Agency <no-reply@konzotech.agency>",
+    from: process.env.SMTP_FROM || `${PRODUCT_NAME} <no-reply@konzotech.agency>`,
     to,
     subject,
     html

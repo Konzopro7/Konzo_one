@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from "../../../shared/brand.mjs";
 import PDFDocument from "pdfkit";
 
 const COLORS = {
@@ -76,7 +77,7 @@ export async function buildBusinessPdf({
     .fillColor("#FFFFFF")
     .font("Helvetica-Bold")
     .fontSize(20)
-    .text(settings?.agency_name || "KONZOTECH AGENCY", 50, 36, {
+    .text(settings?.agency_name || PRODUCT_NAME, 50, 36, {
       align: "left"
     });
 
@@ -241,7 +242,7 @@ export async function buildBusinessPdf({
     .font("Helvetica")
     .fontSize(9)
     .text(
-      `Merci pour votre confiance - ${settings?.agency_name || "Konzotech Agency"}`,
+      `Merci pour votre confiance - ${settings?.agency_name || PRODUCT_NAME}`,
       50,
       doc.page.height - 55,
       { align: "left" }
@@ -270,7 +271,7 @@ export async function buildAccountingExportPdf({ month, entries, settings }) {
     .fillColor(COLORS.muted)
     .font("Helvetica")
     .fontSize(10)
-    .text(settings?.agency_name || "Konzotech Agency", 50, 72);
+    .text(settings?.agency_name || PRODUCT_NAME, 50, 72);
 
   let y = 112;
   doc.rect(50, y, 495, 24).fill(COLORS.panel);

@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from "../../../shared/brand.mjs";
 import { Link } from "react-router-dom";
 import { navigation, canSee } from "./Sidebar.jsx";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -265,7 +266,7 @@ export default function Topbar({ onOpenSidebar }) {
                 {user?.fullName || "Admin"}
               </p>
               <p className="text-xs text-slate-500">
-                {user?.agencyName || "Konzotech Agency"} -{" "}
+                {user?.agencyName || PRODUCT_NAME} -{" "}
                 {user?.role || "admin"}
               </p>
             </div>

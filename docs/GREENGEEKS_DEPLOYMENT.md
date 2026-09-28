@@ -1,8 +1,10 @@
-# GreenGeeks Deployment Guide (Konzotech One)
+# GreenGeeks Deployment Guide (konzoCRM.com)
+
+Target configuration only: DNS, TLS and provider callbacks must be configured separately. Deploy `shared/` alongside `server/`; the backend imports the product identity from it. Keep old public document links working through compatible redirects.
 
 This guide deploys:
-- `one.konzotech.agency` for the React frontend
-- `api.one.konzotech.agency` for the Node.js API
+- `konzocrm.com` for the React frontend
+- `api.konzocrm.com` for the Node.js API
 
 ## 1) Prerequisites
 
@@ -23,10 +25,10 @@ No second repository is required.
 ## 3) Create Subdomains
 
 In cPanel:
-1. Create `one.konzotech.agency` (document root for static frontend).
-2. Create `api.one.konzotech.agency` (used by Node.js app URL).
+1. Create `konzocrm.com` (document root for static frontend).
+2. Create `api.konzocrm.com` (used by Node.js app URL).
 
-## 4) Deploy API (api.one.konzotech.agency)
+## 4) Deploy API (api.konzocrm.com)
 
 ### 4.1 Upload code
 
@@ -54,10 +56,11 @@ PORT=4000
 NODE_ENV=production
 DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DB_NAME
 JWT_SECRET=replace-with-long-random-secret
-CLIENT_URL=https://one.konzotech.agency
-API_URL=https://api.one.konzotech.agency
+CLIENT_URL=https://konzocrm.com
+PUBLIC_CLIENT_URL=https://konzocrm.com
+API_URL=https://api.konzocrm.com
 APP_TIMEZONE=America/Toronto
-SUPER_ADMIN_EMAILS=you@konzotech.agency
+SUPER_ADMIN_EMAILS=you@example.com
 PLAN_PRICE_PRO_MONTHLY=49
 PLAN_PRICE_PREMIUM_MONTHLY=99
 
@@ -66,7 +69,7 @@ SMTP_PORT=587
 SMTP_SECURE=false
 SMTP_USER=
 SMTP_PASS=
-SMTP_FROM=Konzotech One <no-reply@konzotech.agency>
+SMTP_FROM=konzoCRM.com <no-reply@konzotech.agency>
 
 REMINDERS_ENABLED=true
 REMINDERS_CRON=0 */6 * * *
@@ -76,10 +79,11 @@ STRIPE_PUBLISHABLE_KEY=
 STRIPE_WEBHOOK_SECRET=
 STRIPE_PRICE_PRO_MONTHLY=
 STRIPE_PRICE_PREMIUM_MONTHLY=
-STRIPE_SUCCESS_URL=https://one.konzotech.agency/invoices?payment=success&session_id={CHECKOUT_SESSION_ID}
-STRIPE_CANCEL_URL=https://one.konzotech.agency/invoices?payment=cancelled
-BILLING_SUCCESS_URL=https://one.konzotech.agency/settings?billing=success&session_id={CHECKOUT_SESSION_ID}
-BILLING_CANCEL_URL=https://one.konzotech.agency/settings?billing=cancelled
+STRIPE_SUCCESS_URL=https://konzocrm.com/invoices?payment=success&session_id={CHECKOUT_SESSION_ID}
+STRIPE_CANCEL_URL=https://konzocrm.com/invoices?payment=cancelled
+BILLING_SUCCESS_URL=https://konzocrm.com/billing?billing=success&session_id={CHECKOUT_SESSION_ID}
+BILLING_CANCEL_URL=https://konzocrm.com/billing?billing=cancelled
+WHATSAPP_APP_SECRET=
 ```
 
 ### 4.4 Run database SQL
@@ -87,8 +91,7 @@ BILLING_CANCEL_URL=https://one.konzotech.agency/settings?billing=cancelled
 Run full schema (new install):
 - `server/sql/schema.sql`
 
-or migration only (existing install):
-- `server/sql/migrations/2026-04-19-erp-phase2.sql`
+Then follow [the migration runbook](LOCAL_AND_MIGRATIONS.md). For an existing installation, back up first, verify and record the legacy baseline, then apply pending migrations through the runner. Do not replay an arbitrary historical migration or reset the database.
 
 ### 4.5 Configure Node app in cPanel
 
@@ -96,7 +99,7 @@ In `Setup NodeJS App`:
 - Node.js version: `18+` (or highest stable available)
 - Application mode: `Production`
 - Application root: `konzotech-one/server`
-- Application URL: `api.one.konzotech.agency`
+- Application URL: `api.konzocrm.com`
 - Application startup file: `src/server.js`
 
 Then click:
@@ -105,18 +108,18 @@ Then click:
 3. `Restart`
 
 Health check:
-- `https://api.one.konzotech.agency/api/health`
+- `https://api.konzocrm.com/api/health`
 
-## 5) Deploy Frontend (one.konzotech.agency)
+## 5) Deploy Frontend (konzocrm.com)
 
 Build frontend with production API URL:
 
 ```powershell
-$env:VITE_API_URL="https://api.one.konzotech.agency/api"
+$env:VITE_API_URL="https://api.konzocrm.com/api"
 npm run build --prefix client
 ```
 
-Upload `client/dist/*` to the document root of `one.konzotech.agency`.
+Upload `client/dist/*` to the document root of `konzocrm.com`.
 
 The SPA rewrite file is included at:
 - `client/public/.htaccess`
@@ -126,14 +129,14 @@ After upload, confirm `.htaccess` exists in frontend root.
 ## 6) DNS + SSL
 
 - Ensure both subdomains resolve correctly:
-  - `one.konzotech.agency`
-  - `api.one.konzotech.agency`
+  - `konzocrm.com`
+  - `api.konzocrm.com`
 - Enable SSL for both in cPanel.
 - Force HTTPS if not already active.
 
 ## 7) Final Smoke Tests
 
-1. Open `https://one.konzotech.agency`
+1. Open `https://konzocrm.com`
 2. Register/login
 3. Create a client, quote, invoice
 4. Open purchases and download purchase PDF

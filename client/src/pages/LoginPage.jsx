@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from "../../../shared/brand.mjs";
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -18,7 +19,7 @@ import { useAuth } from "../hooks/useAuth.jsx";
 
 const initialLogin = { email: "", password: "" };
 const initialRegister = {
-  agencyName: "Konzotech Agency",
+  agencyName: PRODUCT_NAME,
   fullName: "",
   email: "",
   password: "",
@@ -120,7 +121,7 @@ export default function LoginPage() {
               <Layers size={25} />
             </span>
             <span>
-              Konzotech <strong>One</strong>
+              {PRODUCT_NAME.slice(0, 5)}<strong>{PRODUCT_NAME.slice(5)}</strong>
             </span>
           </Link>
           <div className="auth-story-copy">
@@ -184,7 +185,7 @@ export default function LoginPage() {
             </span>
           </div>
           <p className="auth-story-footer">
-            KONZOTECH ONE <span>CRM & gestion d’agence</span>
+            {PRODUCT_NAME} <span>CRM & gestion d’agence</span>
           </p>
         </section>
 

@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from "../../../shared/brand.mjs";
 import crypto from "crypto";
 import { Router } from "express";
 import { z } from "zod";
@@ -465,7 +466,7 @@ router.post("/:id/send-email", requireRole("admin", "commercial", "finance"), as
       ? buildPortalUrl("invoices", invoice.paymentLinkToken)
       : "";
     const variables = {
-      agencyName: settings?.agency_name || "Konzotech Agency",
+      agencyName: settings?.agency_name || PRODUCT_NAME,
       clientName: invoice.client.name,
       documentNumber: invoice.invoiceNumber,
       total: String(invoice.total),

@@ -2,6 +2,7 @@ import jwt from "jsonwebtoken";
 import { query } from "../db.js";
 import { getJwtSecret } from "../utils/jwtSecret.js";
 import { calcTrialDaysLeft, isSubscriptionAccessible } from "../utils/subscription.js";
+import { expireTrials } from "../services/subscriptionExpiry.js";
 
 const EXEMPT_PATH_PREFIXES = ["/api/auth/me", "/api/billing", "/api/platform"];
 
@@ -80,20 +81,12 @@ export async function requireAuth(req, res, next) {
     const trialEndsAt = agency.trial_ends_at || null;
 
     // Auto-expire trial status when date is reached.
-    if (subscriptionStatus === "trial" && trialEndsAt) {
-      const trialExpired = new Date(trialEndsAt).getTime() < Date.now();
+    if (subscriptionStatus === "trial") {
+      const trialExpired = !trialEndsAt || !(new Date(trialEndsAt).getTime() > Date.now());
       if (trialExpired) {
-        const updateRes = await query(
-          `UPDATE agencies
-           SET subscription_status = 'past_due'
-           WHERE id = $1
-             AND subscription_status = 'trial'
-           RETURNING subscription_status`,
-          [user.agencyId]
-        );
-        if (updateRes.rows[0]?.subscription_status) {
-          subscriptionStatus = updateRes.rows[0].subscription_status;
-        }
+        await expireTrials(user.agencyId);
+        const current = await query("SELECT subscription_status FROM agencies WHERE id = $1", [user.agencyId]);
+        subscriptionStatus = current.rows[0]?.subscription_status || "past_due";
       }
     }
 

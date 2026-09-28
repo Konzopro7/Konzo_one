@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
-import Stripe from "stripe";
+import { getStripeClient, stripeTestMode } from "../services/stripeClient.js";
+import { confirmStripeCheckout } from "../services/stripeSubscriptions.js";
 import { query } from "../db.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { requireRole } from "../middleware/requireRole.js";
@@ -17,13 +18,6 @@ const checkoutSchema = z.object({
 const confirmCheckoutSchema = z.object({
   sessionId: z.string().startsWith("cs_")
 });
-
-function getStripeClient() {
-  if (!process.env.STRIPE_SECRET_KEY) {
-    return null;
-  }
-  return new Stripe(process.env.STRIPE_SECRET_KEY);
-}
 
 function getPlanCatalog() {
   return {
@@ -106,6 +100,7 @@ router.get("/status", async (req, res, next) => {
       subscription: mapSubscriptionPayload(agency),
       plans: getPlanCatalog(),
       stripeEnabled: Boolean(process.env.STRIPE_SECRET_KEY),
+      stripeTestMode: stripeTestMode(),
       simulated:
         process.env.NODE_ENV !== "production" &&
         (!process.env.STRIPE_SECRET_KEY ||
@@ -146,6 +141,10 @@ router.post("/checkout-session", requireRole("admin"), async (req, res, next) =>
       return res.status(409).json({
         message: `Le plan ${targetPlan.label} est déjà actif.`
       });
+    }
+
+    if (agency.stripe_subscription_id && ['active','trial'].includes(agency.subscription_status)) {
+      return res.status(409).json({ message: "Un abonnement Stripe existe déjà. Gérez-le depuis le portail de facturation." });
     }
 
     const stripe = getStripeClient();
@@ -208,10 +207,10 @@ router.post("/checkout-session", requireRole("admin"), async (req, res, next) =>
 
     const successUrl =
       process.env.BILLING_SUCCESS_URL ||
-      `${process.env.CLIENT_URL || "http://localhost:5173"}/settings?billing=success&session_id={CHECKOUT_SESSION_ID}`;
+      `${process.env.PUBLIC_CLIENT_URL || process.env.CLIENT_URL?.split(",")[0] || "http://localhost:5173"}/billing?billing=success&session_id={CHECKOUT_SESSION_ID}`;
     const cancelUrl =
       process.env.BILLING_CANCEL_URL ||
-      `${process.env.CLIENT_URL || "http://localhost:5173"}/settings?billing=cancelled`;
+      `${process.env.PUBLIC_CLIENT_URL || process.env.CLIENT_URL?.split(",")[0] || "http://localhost:5173"}/billing?billing=cancelled`;
 
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
@@ -227,7 +226,8 @@ router.post("/checkout-session", requireRole("admin"), async (req, res, next) =>
       metadata: {
         agencyId: String(req.user.agencyId),
         planTier: payload.planTier
-      }
+      },
+      subscription_data: { metadata: { agencyId: String(req.user.agencyId), planTier: payload.planTier } }
     });
 
     return res.json({
@@ -252,39 +252,30 @@ router.post("/confirm-checkout", requireRole("admin"), async (req, res, next) =>
     }
 
     const session = await stripe.checkout.sessions.retrieve(parsed.data.sessionId);
-    const sessionAgencyId = Number(session.metadata?.agencyId || 0);
-    if (
-      session.mode !== "subscription" ||
-      session.status !== "complete" ||
-      sessionAgencyId !== Number(req.user.agencyId)
-    ) {
-      return res.status(400).json({ message: "Stripe payment is not completed for this agency." });
-    }
-
-    const planTier = session.metadata?.planTier === "premium" ? "premium" : "pro";
-    const customerId = session.customer ? String(session.customer) : null;
-    const subscriptionId = session.subscription ? String(session.subscription) : null;
-    const { rows } = await query(
-      `UPDATE agencies
-       SET plan_tier = $1,
-           subscription_status = 'active',
-           trial_ends_at = COALESCE(trial_ends_at, NOW()),
-           subscription_started_at = NOW(),
-           subscription_ends_at = NOW() + INTERVAL '30 days',
-           stripe_customer_id = COALESCE($2, stripe_customer_id),
-           stripe_subscription_id = COALESCE($3, stripe_subscription_id)
-       WHERE id = $4
-       RETURNING *`,
-      [planTier, customerId, subscriptionId, req.user.agencyId]
-    );
+    const updated = await confirmStripeCheckout(session, req.user.agencyId);
 
     return res.json({
       message: "Stripe subscription confirmed.",
-      subscription: mapSubscriptionPayload(rows[0])
+      subscription: mapSubscriptionPayload(updated)
     });
   } catch (error) {
+    if (error.status) return res.status(error.status).json({ message: error.message });
     return next(error);
   }
+});
+
+router.post("/portal-session", requireRole("admin"), async (req, res, next) => {
+  try {
+    const stripe = getStripeClient();
+    const agency = await fetchAgencySubscription(req.user.agencyId);
+    if (!stripe || !agency?.stripe_customer_id) return res.status(409).json({ message: "Aucun compte de facturation Stripe disponible." });
+    const session = await stripe.billingPortal.sessions.create({
+      customer: agency.stripe_customer_id,
+      return_url: `${process.env.PUBLIC_CLIENT_URL || "http://localhost:5173"}/billing`,
+      ...(process.env.STRIPE_PORTAL_CONFIGURATION ? { configuration: process.env.STRIPE_PORTAL_CONFIGURATION } : {})
+    });
+    return res.json({ portalUrl: session.url });
+  } catch (error) { return next(error); }
 });
 
 router.post("/simulate-cancel", requireRole("admin"), async (req, res, next) => {

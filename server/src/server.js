@@ -29,6 +29,7 @@ import { requestLogger } from "./middleware/requestLogger.js";
 import { startReminderScheduler } from "./services/reminders.js";
 import { assertJwtSecretConfigured } from "./utils/jwtSecret.js";
 import { mfaKey } from "./services/mfa.js";
+import { startSubscriptionExpiryScheduler } from "./services/subscriptionExpiry.js";
 
 dotenv.config();
 assertJwtSecretConfigured();
@@ -136,6 +137,7 @@ app.use((error, req, res, next) => {
 });
 
 app.listen(port, process.env.HOST || "0.0.0.0", () => {
+  startSubscriptionExpiryScheduler();
   startReminderScheduler();
   console.log(`${PRODUCT_NAME} API running on http://localhost:${port}`);
 });

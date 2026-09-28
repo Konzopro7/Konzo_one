@@ -11,11 +11,16 @@ const agency = { plan_tier: "pro", subscription_status: "active" };
 
 async function authenticate(t, { claims = { userId: 1, agencyId: 10, role: "admin", email: "old@example.test", purpose: "access", mfaVerified: true, mfaVersion: 1 }, user = account, failure, token, subscription = agency, baseUrl = "/api/clients", path = "/" } = {}) {
   const queries = [];
+  let currentSubscription = { ...subscription };
   t.mock.method(pool, "query", async (sql, params) => {
     queries.push({ sql, params });
     if (failure) throw failure;
     if (sql.includes("FROM users")) return { rows: user ? [user] : [] };
-    if (sql.includes("FROM agencies")) return { rows: [subscription] };
+    if (sql.includes("FROM agencies")) return { rows: [currentSubscription] };
+    if (sql.includes("WITH expired")) {
+      currentSubscription.subscription_status = "past_due";
+      return { rows: [{ agency_id: 10 }] };
+    }
     throw new Error("Unexpected query in authentication test");
   });
   const req = {
@@ -51,6 +56,21 @@ test("welcome preference exemption does not unlock other routes", async t => {
   const result = await authenticate(t, { subscription: { subscription_status: "past_due" }, baseUrl: "/api/auth", path: "/onboarding/other" });
   assert.equal(result.nextCalled, false);
   assert.equal(result.res.statusCode, 402);
+});
+
+for (const [name, trialEndsAt] of [["ended", new Date(Date.now()-1000).toISOString()], ["missing date", null]]) {
+  test(`a trial with ${name} immediately blocks business APIs even with a valid existing JWT`, async t => {
+    const result = await authenticate(t, { subscription: { subscription_status: "trial", trial_ends_at: trialEndsAt } });
+    assert.equal(result.res.statusCode, 402);
+    assert.equal(result.res.body.code, "SUBSCRIPTION_REQUIRED");
+    assert.equal(result.req.user.subscription.subscriptionStatus, "past_due");
+    assert.equal(result.nextCalled, false);
+  });
+}
+test("an expired trial can still reach subscription checkout", async t => {
+  const result = await authenticate(t, { subscription: { subscription_status: "trial", trial_ends_at: new Date(0) }, baseUrl: "/api/billing", path: "/checkout-session" });
+  assert.equal(result.res.statusCode, 200);
+  assert.equal(result.nextCalled, true);
 });
 
 test("suspended workspaces lose business access without preventing account recovery", async t => {

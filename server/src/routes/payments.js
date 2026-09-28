@@ -1,24 +1,12 @@
 import crypto from "crypto";
 import { Router } from "express";
-import Stripe from "stripe";
-import { query } from "../db.js";
+import { getStripeClient, stripeId, stripeTestMode } from "../services/stripeClient.js";
+import { syncStripeSubscription, confirmStripeCheckout } from "../services/stripeSubscriptions.js";
+import { query, withTransaction } from "../db.js";
 import { requireAuth } from "../middleware/requireAuth.js";
-import { mapStripeSubscriptionStatus } from "../utils/subscription.js";
 import { buildPortalUrl } from "../services/templates.js";
 
 const router = Router();
-
-let stripeClient;
-
-function getStripeClient() {
-  if (!process.env.STRIPE_SECRET_KEY) {
-    return null;
-  }
-  if (!stripeClient) {
-    stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY);
-  }
-  return stripeClient;
-}
 
 function invoiceToLineItem(invoice, currency = "CAD") {
   return {
@@ -121,7 +109,6 @@ async function createCheckoutSession({ invoice, currency, successUrl, cancelUrl 
 
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
-    payment_method_types: ["card"],
     line_items: [invoiceToLineItem(invoice, currency)],
     customer_email: invoice.client_email || undefined,
     success_url: successUrl,
@@ -142,7 +129,7 @@ async function createCheckoutSession({ invoice, currency, successUrl, cancelUrl 
   return session;
 }
 
-async function markInvoicePaidBySession(session) {
+async function markInvoicePaidBySession(session, execute = query) {
   const invoiceId = Number(session?.metadata?.invoiceId || 0);
   const agencyId = Number(session?.metadata?.agencyId || 0);
 
@@ -151,7 +138,7 @@ async function markInvoicePaidBySession(session) {
     return;
   }
 
-  await query(
+  await execute(
     `UPDATE invoices
      SET status = 'paid',
          payment_method = 'stripe',
@@ -163,83 +150,6 @@ async function markInvoicePaidBySession(session) {
        AND status = 'pending'
        AND stripe_checkout_session_id = $1`,
     [session.id || null, session.payment_intent || null, invoiceId, agencyId, session.amount_total]
-  );
-}
-
-async function markAgencySubscriptionFromCheckout(session) {
-  const agencyId = Number(session?.metadata?.agencyId || 0);
-  if (!agencyId) {
-    return;
-  }
-
-  const planTier = String(session?.metadata?.planTier || "pro").toLowerCase() === "premium"
-    ? "premium"
-    : "pro";
-
-  const customerId = session?.customer ? String(session.customer) : null;
-  const subscriptionId = session?.subscription ? String(session.subscription) : null;
-
-  await query(
-    `UPDATE agencies
-     SET plan_tier = $1,
-         subscription_status = 'active',
-         trial_ends_at = COALESCE(trial_ends_at, NOW()),
-         subscription_started_at = NOW(),
-         subscription_ends_at = NOW() + INTERVAL '30 days',
-         stripe_customer_id = COALESCE($2, stripe_customer_id),
-         stripe_subscription_id = COALESCE($3, stripe_subscription_id)
-     WHERE id = $4`,
-    [planTier, customerId, subscriptionId, agencyId]
-  );
-}
-
-function mapPlanTierFromPriceId(priceId) {
-  const proPriceId = process.env.STRIPE_PRICE_PRO_MONTHLY;
-  const premiumPriceId = process.env.STRIPE_PRICE_PREMIUM_MONTHLY;
-
-  if (priceId && premiumPriceId && priceId === premiumPriceId) {
-    return "premium";
-  }
-  if (priceId && proPriceId && priceId === proPriceId) {
-    return "pro";
-  }
-  return null;
-}
-
-async function syncAgencySubscriptionFromStripe(stripeSubscription) {
-  const subscriptionId = String(stripeSubscription?.id || "");
-  const customerId = String(stripeSubscription?.customer || "");
-
-  if (!subscriptionId && !customerId) {
-    return;
-  }
-
-  const currentPeriodEnd = Number(stripeSubscription?.current_period_end || 0);
-  const currentPeriodStart = Number(stripeSubscription?.current_period_start || 0);
-
-  const firstItem = stripeSubscription?.items?.data?.[0];
-  const priceId = firstItem?.price?.id || null;
-  const inferredPlan = mapPlanTierFromPriceId(priceId);
-  const mappedStatus = mapStripeSubscriptionStatus(stripeSubscription?.status);
-
-  await query(
-    `UPDATE agencies
-     SET stripe_customer_id = CASE WHEN $1 <> '' THEN $1 ELSE stripe_customer_id END,
-         stripe_subscription_id = CASE WHEN $2 <> '' THEN $2 ELSE stripe_subscription_id END,
-         plan_tier = COALESCE($3, plan_tier),
-         subscription_status = $4,
-         trial_ends_at = COALESCE(trial_ends_at, NOW()),
-         subscription_started_at = CASE
-           WHEN $5 > 0 THEN TO_TIMESTAMP($5)
-           ELSE subscription_started_at
-         END,
-         subscription_ends_at = CASE
-           WHEN $6 > 0 THEN TO_TIMESTAMP($6)
-           ELSE subscription_ends_at
-         END
-     WHERE stripe_subscription_id = $2
-        OR stripe_customer_id = $1`,
-    [customerId, subscriptionId, inferredPlan, mappedStatus, currentPeriodStart, currentPeriodEnd]
   );
 }
 
@@ -267,40 +177,42 @@ export async function handleStripeWebhook(req, res) {
       );
     }
 
-    if (event.type === "checkout.session.completed") {
-      const session = event.data.object;
-      if (session?.mode === "payment") {
-        await markInvoicePaidBySession(session);
-      } else if (session?.mode === "subscription") {
-        await markAgencySubscriptionFromCheckout(session);
+    if (typeof event.livemode === "boolean" && event.livemode === stripeTestMode()) {
+      return res.status(400).send("stripe_mode_mismatch");
+    }
+    const supported = ["checkout.session.completed", "checkout.session.async_payment_succeeded",
+      "customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted",
+      "customer.subscription.paused", "customer.subscription.resumed", "invoice.paid", "invoice.payment_failed"];
+    if (!supported.includes(event.type)) return res.json({ received: true });
+    await withTransaction(async db => {
+      const claimed = await db.query(`INSERT INTO stripe_webhook_events(id,event_type,livemode)
+        VALUES($1,$2,$3) ON CONFLICT DO NOTHING RETURNING id`, [event.id, event.type, Boolean(event.livemode)]);
+      if (!claimed.rowCount) return;
+      const execute = (sql, params) => db.query(sql, params);
+      const object = event.data.object;
+      if (event.type.startsWith("checkout.session.")) {
+        if (object.mode === "payment") await markInvoicePaidBySession(object, execute);
+        else if (object.mode === "subscription" && object.payment_status === "paid") {
+          await confirmStripeCheckout(object, Number(object.metadata?.agencyId), execute);
+        }
+      } else {
+        const id = event.type.startsWith("customer.subscription.") ? stripeId(object)
+          : stripeId(object.subscription || object.parent?.subscription_details?.subscription);
+        if (id) await syncStripeSubscription(await stripe.subscriptions.retrieve(id), { execute });
       }
-    }
-
-    if (event.type === "checkout.session.async_payment_succeeded") {
-      const session = event.data.object;
-      if (session?.mode === "payment") {
-        await markInvoicePaidBySession(session);
-      }
-    }
-
-    if (
-      event.type === "customer.subscription.created" ||
-      event.type === "customer.subscription.updated" ||
-      event.type === "customer.subscription.deleted"
-    ) {
-      await syncAgencySubscriptionFromStripe(event.data.object);
-    }
+    });
 
     return res.json({ received: true });
   } catch (error) {
-    console.error("[stripe-webhook]", error);
-    return res.status(400).send("webhook_error");
+    console.error("[stripe-webhook]", error.type || error.name, error.code || "processing_failed");
+    return res.status(error.type === "StripeSignatureVerificationError" ? 400 : 500).send("webhook_error");
   }
 }
 
 router.get("/status", requireAuth, async (req, res) => {
   return res.json({
     enabled: Boolean(process.env.STRIPE_SECRET_KEY),
+    testMode: stripeTestMode(),
     publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || null
   });
 });

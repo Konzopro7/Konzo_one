@@ -1,5 +1,5 @@
 import { PRODUCT_NAME } from "../../../shared/brand.mjs";
-import { Outlet, useLocation } from "react-router-dom";
+import { Link, Outlet, useLocation } from "react-router-dom";
 import { Suspense, useMemo, useState } from "react";
 import Sidebar from "./Sidebar.jsx";
 import Topbar from "./Topbar.jsx";
@@ -45,6 +45,10 @@ export default function AppLayout() {
   const {user}=useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
+  const subscription = user?.subscription;
+  const billingRequired = subscription && (['past_due','canceled'].includes(subscription.subscriptionStatus) ||
+    (subscription.subscriptionStatus === 'trial' && !(new Date(subscription.trialEndsAt).getTime() > Date.now())));
+  const accountPage = ["/profile","/billing","/platform","/guide"].includes(location.pathname);
 
   const title = useMemo(
     () => pageTitles[location.pathname] || PRODUCT_NAME,
@@ -68,7 +72,7 @@ export default function AppLayout() {
             </p>
           </div>
           <Suspense fallback={<section className="card"><p className="text-sm text-slate-500">Chargement de la page…</p></section>}>
-            {user?.subscription?.isSuspended && !["/profile","/billing","/platform","/guide"].includes(location.pathname) ? <section className="card"><p role="alert" className="text-sm text-red-600">Votre entreprise est suspendue. Contactez l’administrateur de la plateforme pour rétablir l’accès.</p></section> : <Outlet />}
+            {user?.subscription?.isSuspended && !accountPage ? <section className="card"><p role="alert" className="text-sm text-red-600">Votre entreprise est suspendue. Contactez l’administrateur de la plateforme pour rétablir l’accès.</p></section> : billingRequired && !accountPage ? <section className="card"><p role="alert" className="text-sm text-slate-600">Votre essai est terminé ou votre abonnement est inactif. Activez un abonnement pour retrouver l’accès au CRM. Vos données sont conservées.</p><Link to="/billing" className="btn-primary mt-4">Gérer mon abonnement</Link></section> : <Outlet />}
           </Suspense>
         </main>
       </div>

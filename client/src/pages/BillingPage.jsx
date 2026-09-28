@@ -7,7 +7,7 @@ import { formatCurrency, formatDate } from "../lib/format.js";
 import { useAuth } from "../hooks/useAuth.jsx";
 
 export default function BillingPage() {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, refreshUser } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [processingPlan, setProcessingPlan] = useState("");
@@ -55,9 +55,11 @@ export default function BillingPage() {
 
     api
       .post("/billing/confirm-checkout", { sessionId })
-      .then(async () => {
-        toast.success("Paiement confirmé. Ton abonnement est actif.");
+      .then(async ({ data }) => {
+        if (data.subscription?.subscriptionStatus === "active") toast.success("Paiement confirmé. Ton abonnement est actif.");
+        else toast.error("L’abonnement reste inactif. Vérifiez son statut de paiement.");
         await loadStatus();
+        await refreshUser?.();
       })
       .catch((error) => {
         confirmingSessionRef.current = "";
@@ -109,13 +111,16 @@ export default function BillingPage() {
       toast.error("Seuls les admins peuvent gérer l'abonnement.");
       return;
     }
+    if (status?.subscription?.stripeSubscriptionId && ['active','trial'].includes(subscriptionStatus)) {
+      return openBillingPortal();
+    }
 
     setProcessingPlan(planTier);
     try {
       const { data } = await api.post("/billing/checkout-session", { planTier });
 
       if (data.checkoutUrl) {
-        window.open(data.checkoutUrl, "_blank", "noopener,noreferrer");
+        window.location.assign(data.checkoutUrl);
         toast.success("Redirection vers Stripe.");
       } else if (data.simulated) {
         toast.success(
@@ -145,6 +150,17 @@ export default function BillingPage() {
     }
   }
 
+  async function openBillingPortal() {
+    if (!isAdmin || processingPlan) return;
+    setProcessingPlan('portal');
+    try {
+      const { data } = await api.post('/billing/portal-session');
+      window.location.assign(data.portalUrl);
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Le portail de facturation est indisponible.');
+    } finally { setProcessingPlan(''); }
+  }
+
   if (loading) {
     return (
       <section className="card">
@@ -155,6 +171,8 @@ export default function BillingPage() {
 
   return (
     <div className="space-y-5">
+      {status?.stripeTestMode && <section className="card"><p role="status" className="text-sm text-amber-700">Stripe est en mode test. Les paiements sont simulés et aucun montant réel n’est encaissé.</p></section>}
+      {isAdmin && status?.subscription?.stripeCustomerId && <section className="card"><button type="button" className="btn-secondary" disabled={Boolean(processingPlan)} onClick={openBillingPortal}>Gérer ma facturation Stripe</button></section>}
       <section className="card">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>

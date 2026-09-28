@@ -40,7 +40,7 @@ export function isSubscriptionAccessible(subscription) {
     return false;
   }
 
-  return new Date(subscription.trialEndsAt).getTime() >= Date.now();
+  return new Date(subscription.trialEndsAt).getTime() > Date.now();
 }
 
 export function calcTrialDaysLeft(trialEndsAt) {
@@ -60,4 +60,3 @@ export function calcTrialDaysLeft(trialEndsAt) {
 
   return Math.ceil(diffMs / (24 * 60 * 60 * 1000));
 }
-

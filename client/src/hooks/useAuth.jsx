@@ -54,6 +54,13 @@ export function AuthProvider({ children }) {
     clearSession();
   }
 
+  async function refreshUser() {
+    const { data } = await api.get("/auth/me");
+    setUser(data.user);
+    localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+    return data.user;
+  }
+
   async function dismissWelcomeGuide() {
     const currentUserId = user?.id;
     await api.put("/auth/onboarding");
@@ -124,6 +131,7 @@ export function AuthProvider({ children }) {
       register,
       completeLogin: (data) => { if (data.token && data.user) storeSession(data.token, data.user); },
       logout,
+      refreshUser,
       dismissWelcomeGuide,
       updateProfile
     }),

@@ -3,6 +3,8 @@ import SecurityLog from "../components/SecurityLog.jsx";
 import AdminWorkspaces from "../components/AdminWorkspaces.jsx";
 import AdminAudit from "../components/AdminAudit.jsx";
 import GoogleAnalyticsPanel from "../components/GoogleAnalyticsPanel.jsx";
+import NewsletterAdminPanel from "../components/NewsletterAdminPanel.jsx";
+import PlatformContactPanel from "../components/PlatformContactPanel.jsx";
 import {
   BarElement,
   CategoryScale,
@@ -146,7 +148,9 @@ export default function PlatformAdminPage() {
         <p className="mt-2 text-sm text-slate-500">Double authentification configurée : {payload.metrics.protectedUsers ?? 0} / {payload.metrics.activeUsers} utilisateurs actifs.</p>
         <div className="mt-4 flex flex-wrap items-center gap-3"><button className="btn-secondary" onClick={()=>setRefresh(n=>n+1)} disabled={loading}>Actualiser les indicateurs</button>{updatedAt&&<span className="text-xs text-slate-500">Mis à jour à {updatedAt.toLocaleTimeString("fr-CA")}</span>}</div>
       </section>
-      <nav aria-label="Sections d’administration" className="flex flex-wrap gap-2">{[["overview","Vue d’ensemble"],["agencies","Entreprises et utilisateurs"],["ga4","Google Analytics 4"],["security","Connexions et sécurité"],["audit","Interventions admin"]].map(([key,label])=><button key={key} aria-current={tab===key?"page":undefined} className={tab===key?"btn-primary":"btn-secondary"} onClick={()=>setTab(key)}>{label}</button>)}</nav>
+      <nav aria-label="Sections d’administration" className="flex flex-wrap gap-2">{[["overview","Vue d’ensemble"],["agencies","Entreprises et utilisateurs"],["newsletter","Newsletter"],["ga4","Google Analytics 4"],["security","Connexions et sécurité"],["audit","Interventions admin"]].map(([key,label])=><button key={key} aria-current={tab===key?"page":undefined} className={tab===key?"btn-primary":"btn-secondary"} onClick={()=>setTab(key)}>{label}</button>)}</nav>
+      {tab==='newsletter'&&<NewsletterAdminPanel/>}
+      {tab==='overview'&&<PlatformContactPanel/>}
       {error&&<section className="card"><p role="alert" className="text-sm text-red-600">{error}</p></section>}
       {tab==="agencies"&&<AdminWorkspaces/>}{tab==="ga4"&&<GoogleAnalyticsPanel/>}{tab==="security"&&<SecurityLog endpoint="/platform/security" platform/>}{tab==="audit"&&<AdminAudit/>}
       {tab==="overview"&&!error&&<>

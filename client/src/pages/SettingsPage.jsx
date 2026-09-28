@@ -9,6 +9,7 @@ import {
   Check,
   FileText,
   ArrowUpRight,
+  Phone,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
@@ -16,6 +17,7 @@ import toast from "react-hot-toast";
 import api from "../lib/api.js";
 import { uploadFile } from "../lib/uploads.js";
 import { useAuth } from "../hooks/useAuth.jsx";
+import NewsletterSection from "../components/NewsletterSection.jsx";
 
 const initialSettings = {
   logoUrl: "",
@@ -67,6 +69,12 @@ const contactChannels = [
 ];
 
 function SupportContacts() {
+  const [phone, setPhone] = useState('');
+  useEffect(() => {
+    let active = true;
+    api.get('/support/contact').then(({ data }) => { if (active) setPhone(data.phone || ''); }).catch(() => {});
+    return () => { active = false; };
+  }, []);
   return (
     <section className="card mt-6" aria-labelledby="support-contacts-title">
       <div className="section-intro">
@@ -81,6 +89,7 @@ function SupportContacts() {
           </p>
         </div>
       </div>
+      {phone && <div className="mb-5"><h3 className="font-semibold text-slate-900">Nous joindre par téléphone</h3><a className="btn-secondary mt-3 gap-2" href={`tel:${phone.replace(/[^+\d]/g, '')}`}><Phone size={15}/>{phone}</a></div>}
       <div className="grid gap-5 sm:grid-cols-2">
         {contactChannels.map(({ title, mailbox, description }) => {
           const email = `${mailbox}@${PRODUCT_DOMAIN}`;
@@ -661,6 +670,7 @@ export default function SettingsPage() {
           </button>
         </div>
       </form>
+      <div className="mt-6"><NewsletterSection /></div>
       <SupportContacts />
     </div>
   );

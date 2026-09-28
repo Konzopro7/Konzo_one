@@ -26,6 +26,31 @@ router.get("/security", async (req, res, next) => {
   try { res.json(await listSecurityEvents(req)); } catch (error) { next(error); }
 });
 
+router.get('/newsletter',async(req,res,next)=>{
+  try {
+    const {page,limit}=pagination(req);
+    const status=['subscribed','pending','unsubscribed'].includes(req.query.status)?req.query.status:'subscribed';
+    const {rows}=await query(`SELECT n.user_id,u.full_name,n.email,n.status,n.confirmed_at,n.unsubscribed_at,a.name AS agency
+      FROM newsletter_subscriptions n JOIN users u ON u.id=n.user_id JOIN agencies a ON a.id=n.agency_id
+      WHERE n.status=$1 AND n.email=u.email AND u.is_active AND (n.status<>'subscribed' OR n.confirmed_at IS NOT NULL)
+      AND (n.email ILIKE $2 OR u.full_name ILIKE $2 OR a.name ILIKE $2)
+      ORDER BY n.updated_at DESC,n.user_id DESC LIMIT $3 OFFSET $4`,[status,searchPattern(req.query.search),limit+1,(page-1)*limit]);
+    res.set('Cache-Control','no-store').json({page,hasMore:rows.length>limit,items:rows.slice(0,limit)});
+  } catch(error){next(error);}
+});
+router.put('/contact',async(req,res,next)=>{
+  try {
+    const parsed=z.object({phone:z.string().trim().max(40).refine(value=>value==='' || (/^[+()\d .-]+$/.test(value) && /^\d{7,15}$/.test(value.replace(/\D/g,''))), 'Vérifiez le numéro de téléphone.')}).strict().safeParse(req.body);
+    if(!parsed.success)return res.status(400).json({message:'Indiquez un numéro de téléphone valide avec son indicatif.'});
+    await withTransaction(async db=>{
+      const before=(await db.query('SELECT support_phone FROM platform_settings WHERE id=1 FOR UPDATE')).rows[0];
+      await db.query('UPDATE platform_settings SET support_phone=$1,updated_at=NOW() WHERE id=1',[parsed.data.phone || null]);
+      await platformAudit(req,req.user.agencyId,'ADMIN_UPDATE','platform_settings',1,before,{support_phone:parsed.data.phone},db);
+    });
+    res.json(parsed.data);
+  }catch(error){next(error);}
+});
+
 const validId=value=>/^[1-9]\d*$/.test(String(value)) && Number.isSafeInteger(Number(value)) ? Number(value) : null;
 router.get("/agencies/:id/:resource/:recordId",async(req,res,next)=>{
   try{

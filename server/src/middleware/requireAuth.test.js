@@ -72,6 +72,11 @@ test("an expired trial can still reach subscription checkout", async t => {
   assert.equal(result.res.statusCode, 200);
   assert.equal(result.nextCalled, true);
 });
+test("an expired trial can manage newsletter consent without unlocking business data", async t => {
+  const result = await authenticate(t, { subscription: { subscription_status: "past_due" }, baseUrl: "/api/newsletter", path: "/unsubscribe" });
+  assert.equal(result.nextCalled, true);
+  assert.equal(result.res.statusCode, 200);
+});
 
 test("suspended workspaces lose business access without preventing account recovery", async t => {
   const result=await authenticate(t,{subscription:{...agency,is_suspended:true}});

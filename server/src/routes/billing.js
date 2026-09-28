@@ -7,6 +7,7 @@ import { query } from "../db.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { requireRole } from "../middleware/requireRole.js";
 import { calcTrialDaysLeft } from "../utils/subscription.js";
+import { newsletterCheckoutDiscount, newsletterStatus } from "../services/newsletter.js";
 
 const router = Router();
 
@@ -100,6 +101,7 @@ router.get("/status", async (req, res, next) => {
       agencyName: agency.name,
       subscription: mapSubscriptionPayload(agency),
       plans: getPlanCatalog(),
+      newsletterOffer: await newsletterStatus(req.user),
       stripeEnabled: Boolean(process.env.STRIPE_SECRET_KEY),
       stripeTestMode: stripeTestMode(),
       simulated:
@@ -213,8 +215,10 @@ router.post("/checkout-session", requireRole("admin"), async (req, res, next) =>
       process.env.BILLING_CANCEL_URL ||
       `${process.env.PUBLIC_CLIENT_URL || process.env.CLIENT_URL?.split(",")[0] || "http://localhost:5173"}/billing?billing=cancelled`;
 
+    const newsletterCoupon = await newsletterCheckoutDiscount(req.user.agencyId, targetPlan.stripePriceId);
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
+      ...(newsletterCoupon ? { discounts: [{ coupon: newsletterCoupon }] } : {}),
       customer: customerId,
       success_url: successUrl,
       cancel_url: cancelUrl,
@@ -226,7 +230,8 @@ router.post("/checkout-session", requireRole("admin"), async (req, res, next) =>
       ],
       metadata: {
         agencyId: String(req.user.agencyId),
-        planTier: payload.planTier
+        planTier: payload.planTier,
+        ...(newsletterCoupon ? { newsletterCoupon } : {})
       },
       subscription_data: { metadata: { agencyId: String(req.user.agencyId), planTier: payload.planTier } }
     });

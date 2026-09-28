@@ -37,5 +37,9 @@ export async function confirmStripeCheckout(session, agencyId, execute = query) 
   if (stripeId(subscription.customer) !== stripeId(session.customer) || stripeId(subscription) !== stripeId(session.subscription)) throw new Error("Stripe subscription/customer mismatch.");
   const row = await syncStripeSubscription(subscription, { agencyId, attach: subscription.status === "active", execute });
   if (!row) throw new Error("Stripe subscription does not match this workspace and its configured plan.");
+  if (session.metadata?.newsletterCoupon) {
+    await execute(`UPDATE agencies SET newsletter_discount_redeemed_at=COALESCE(newsletter_discount_redeemed_at,NOW())
+      WHERE id=$1 AND newsletter_coupon_id=$2 AND stripe_customer_id=$3`, [agencyId, session.metadata.newsletterCoupon, stripeId(session.customer)]);
+  }
   return row;
 }

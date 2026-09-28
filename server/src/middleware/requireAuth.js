@@ -4,7 +4,7 @@ import { getJwtSecret } from "../utils/jwtSecret.js";
 import { calcTrialDaysLeft, isSubscriptionAccessible } from "../utils/subscription.js";
 import { expireTrials } from "../services/subscriptionExpiry.js";
 
-const EXEMPT_PATH_PREFIXES = ["/api/auth/me", "/api/billing", "/api/platform"];
+const EXEMPT_PATH_PREFIXES = ["/api/auth/me", "/api/billing", "/api/platform", "/api/newsletter"];
 
 function isExemptPath(fullPath) {
   return ["/api/auth/onboarding", "/api/auth/profile"].includes(fullPath) ||

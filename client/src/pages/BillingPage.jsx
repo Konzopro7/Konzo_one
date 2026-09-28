@@ -232,6 +232,7 @@ export default function BillingPage() {
           </p>
         </section>
       )}
+      {status?.newsletterOffer?.discountReady && <section className="card"><h2 className="font-semibold">Votre remise newsletter est disponible</h2><p className="mt-2 text-sm text-slate-600">5 % seront appliqués automatiquement sur le premier mois de votre premier abonnement mensuel. Les mois suivants seront au tarif habituel. Remise hors taxes.</p></section>}
       {isAdmin && status?.subscription?.stripeCustomerId && (
         <section className="card">
           <div className="flex flex-wrap gap-3">

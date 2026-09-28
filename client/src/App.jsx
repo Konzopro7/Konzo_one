@@ -20,6 +20,7 @@ const PricingPage = lazy(() => import("./pages/PricingPage.jsx"));
 const PurchasesPage = lazy(() => import("./pages/PurchasesPage.jsx"));
 const QuotesPage = lazy(() => import("./pages/QuotesPage.jsx"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage.jsx"));
+const NewsletterActionPage = lazy(() => import("./pages/NewsletterActionPage.jsx"));
 const TeamPage = lazy(() => import("./pages/TeamPage.jsx"));
 const ActivityPage = lazy(() => import("./pages/ActivityPage.jsx"));
 const ClientPortalPage = lazy(() => import("./pages/ClientPortalPage.jsx"));
@@ -43,6 +44,7 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/forgot-password" element={<LoginPage recoveryMode="forgot" />} />
         <Route path="/reset-password" element={<LoginPage recoveryMode="reset" />} />
+        <Route path="/newsletter/:action" element={<NewsletterActionPage />} />
         <Route path="/portal/:type/:token" element={<ClientPortalPage />} />
 
         <Route element={<ProtectedRoute />}>

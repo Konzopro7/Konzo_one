@@ -68,6 +68,9 @@ async function compile(file) {
 const { default: Settings } = await import(
   pathToFileURL(await compile(path.join(root, "src/pages/SettingsPage.jsx")))
 );
+const { default: Newsletter } = await import(
+  pathToFileURL(await compile(path.join(root, "src/components/NewsletterSection.jsx")))
+);
 const { default: Clients } = await import(
   pathToFileURL(await compile(path.join(root, "src/pages/ClientsPage.jsx")))
 );
@@ -581,6 +584,33 @@ after(async () => {
   assert.equal(path.dirname(scratch), path.join(root, "node_modules"));
   assert.ok(path.basename(scratch).startsWith(".workspace-test-"));
   await rm(scratch, { recursive: true, force: true });
+});
+
+test("newsletter waits for explicit consent, submits no recipient IDs and retains choices on failure", async () => {
+  globalThis.__workspaceTest.responses = {"/newsletter/status":{status:"not_subscribed",email:"fixture@example.test",offerEligible:true,emailEnabled:true}};
+  globalThis.__workspaceTest.failPost = true;
+  const ui = await render(Newsletter);
+  const submit = () => ui.findAllByType("button").find(button=>button.children.includes("M’inscrire à la newsletter"));
+  assert.equal(submit().props.disabled,true);
+  assert.equal(globalThis.__workspaceTest.postCount || 0,0);
+  await act(async()=>ui.findByType("input").props.onChange({target:{checked:true}}));
+  assert.equal(submit().props.disabled,false);
+  await act(async()=>submit().props.onClick());
+  assert.deepEqual(globalThis.__workspaceTest.posted,{path:"/newsletter/subscribe",data:{consent:true}});
+  assert.equal(ui.findByType("input").props.checked,true);
+  assert.equal(submit().props.disabled,false);
+  assert.ok(ui.findAll(node=>node.props.role==="alert").length);
+});
+
+test("newsletter login offer respects saved refusal and does not interfere with the welcome guide",async()=>{
+  globalThis.__workspaceTest.responses={"/newsletter/status":{status:"not_subscribed",email:"fixture@example.test",promptDismissed:true}};
+  const ui=await render(Newsletter,{prompt:true});
+  assert.equal(ui.findAllByType("section").length,0);
+  act(()=>view.unmount());
+  globalThis.__workspaceTest.responses["/newsletter/status"].promptDismissed=false;
+  globalThis.__workspaceTest.auth.user.needsWelcomeGuide=true;
+  const welcome=await render(Newsletter,{prompt:true});
+  assert.equal(welcome.findAllByType("section").length,0);
 });
 
 test("settings retain edits across tabs and save numeric reminder delays", async () => {

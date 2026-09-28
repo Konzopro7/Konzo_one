@@ -4,6 +4,7 @@ import { Suspense, useMemo, useState } from "react";
 import Sidebar from "./Sidebar.jsx";
 import Topbar from "./Topbar.jsx";
 import WelcomeGuide from "../components/WelcomeGuide.jsx";
+import NewsletterSection from "../components/NewsletterSection.jsx";
 import { TourProvider } from "../hooks/useTour.jsx";
 import { useAuth } from "../hooks/useAuth.jsx";
 
@@ -71,6 +72,7 @@ export default function AppLayout() {
                 "Un espace pour organiser votre activité et avancer ensemble."}
             </p>
           </div>
+          {location.pathname !== '/settings' && <NewsletterSection prompt />}
           <Suspense fallback={<section className="card"><p className="text-sm text-slate-500">Chargement de la page…</p></section>}>
             {user?.subscription?.isSuspended && !accountPage ? <section className="card"><p role="alert" className="text-sm text-red-600">Votre entreprise est suspendue. Contactez l’administrateur de la plateforme pour rétablir l’accès.</p></section> : billingRequired && !accountPage ? <section className="card"><p role="alert" className="text-sm text-slate-600">Votre essai est terminé ou votre abonnement est inactif. Activez un abonnement pour retrouver l’accès au CRM. Vos données sont conservées.</p><Link to="/billing" className="btn-primary mt-4">Gérer mon abonnement</Link></section> : <Outlet />}
           </Suspense>

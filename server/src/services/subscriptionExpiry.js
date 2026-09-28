@@ -8,8 +8,8 @@ export async function expireTrials(agencyId = null) {
       AND (trial_ends_at IS NULL OR trial_ends_at <= NOW())
       AND ($1::integer IS NULL OR id = $1)
     RETURNING id
-  ) INSERT INTO audit_logs (agency_id, action, entity_type, entity_id, metadata)
-    SELECT id, 'UPDATE', 'subscription', id,
+  ) INSERT INTO audit_logs (agency_id, action, entity_type, entity_id, path, status_code, metadata)
+    SELECT id, 'UPDATE', 'subscription', id, '/system/subscriptions/expire-trials', 200,
       '{"reason":"trial_expired","previousStatus":"trial","newStatus":"past_due"}'::jsonb
     FROM expired RETURNING agency_id`, [agencyId]);
   return rows.length;

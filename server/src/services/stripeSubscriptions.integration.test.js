@@ -18,7 +18,7 @@ test("PostgreSQL: trial expiry, paid Stripe activation, tenant scope and idempot
   try {
     await db.query(`CREATE TEMP TABLE agencies(id INT PRIMARY KEY,subscription_status TEXT,trial_ends_at TIMESTAMP,updated_at TIMESTAMP DEFAULT NOW(),plan_tier TEXT,
       stripe_customer_id TEXT UNIQUE,stripe_subscription_id TEXT UNIQUE,subscription_started_at TIMESTAMP,subscription_ends_at TIMESTAMP);
-      CREATE TEMP TABLE audit_logs(agency_id INT,action TEXT,entity_type TEXT,entity_id INT,metadata JSONB);
+      CREATE TEMP TABLE audit_logs(agency_id INT,action VARCHAR(20) NOT NULL,entity_type VARCHAR(80) NOT NULL,entity_id INT,path VARCHAR(255) NOT NULL,status_code INT NOT NULL,metadata JSONB);
       CREATE TEMP TABLE users(id INT,agency_id INT,is_active BOOLEAN);
       INSERT INTO agencies(id,subscription_status,trial_ends_at,plan_tier,stripe_customer_id) VALUES
       (1,'trial',NOW()-INTERVAL '1 second','pro','cus_one'),(2,'trial',NOW()+INTERVAL '10 days','pro','cus_two'),

@@ -1,4 +1,4 @@
-import { PRODUCT_NAME } from "../../../shared/brand.mjs";
+import { PRODUCT_DOMAIN, PRODUCT_NAME } from "../../../shared/brand.mjs";
 import {
   Building2,
   CreditCard,
@@ -38,6 +38,81 @@ const initialSettings = {
     "<p>Bonjour {{clientName}},</p><p>Ceci est un rappel concernant {{documentNumber}}.</p>",
   stripeEnabled: false,
 };
+
+const contactChannels = [
+  {
+    title: "Assistance technique",
+    mailbox: "support",
+    description:
+      "Connexion, accès au compte, problème technique ou aide à l’utilisation du CRM.",
+  },
+  {
+    title: "Facturation et abonnement",
+    mailbox: "facturation",
+    description:
+      "Paiements, factures de votre abonnement, changement de formule ou résiliation.",
+  },
+  {
+    title: "Informations sur le CRM",
+    mailbox: "info",
+    description:
+      "Fonctionnalités, offres et renseignements pour choisir votre abonnement.",
+  },
+  {
+    title: "Demandes générales",
+    mailbox: "contact",
+    description:
+      "Suggestions, partenariats ou toute autre demande à notre équipe.",
+  },
+];
+
+function SupportContacts() {
+  return (
+    <section className="card mt-6" aria-labelledby="support-contacts-title">
+      <div className="section-intro">
+        <span className="section-icon">
+          <Mail size={20} />
+        </span>
+        <div>
+          <h2 id="support-contacts-title">Besoin d’aide ?</h2>
+          <p>
+            Contactez l’équipe {PRODUCT_NAME} à l’adresse correspondant à votre
+            besoin.
+          </p>
+        </div>
+      </div>
+      <div className="grid gap-5 sm:grid-cols-2">
+        {contactChannels.map(({ title, mailbox, description }) => {
+          const email = `${mailbox}@${PRODUCT_DOMAIN}`;
+          return (
+            <div
+              key={mailbox}
+              className="rounded-xl border border-slate-200 p-4"
+            >
+              <h3 className="font-semibold text-slate-900">{title}</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-500">
+                {description}
+              </p>
+              <a
+                href={`mailto:${email}`}
+                className="btn-secondary mt-4 max-w-full gap-2"
+                aria-label={`Écrire à ${email} — ${title}`}
+              >
+                <Mail size={15} className="shrink-0" />
+                <span className="min-w-0 break-all">{email}</span>
+              </a>
+            </div>
+          );
+        })}
+      </div>
+      <p className="mt-5 text-xs leading-6 text-slate-500">
+        Pour faciliter le suivi, indiquez le nom de votre espace et décrivez
+        votre demande. Le lien ouvre votre application de messagerie ; vous
+        pouvez aussi copier l’adresse.
+      </p>
+    </section>
+  );
+}
 
 export default function SettingsPage() {
   const { isAdmin } = useAuth();
@@ -136,26 +211,32 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <section className="card">
-        <p className="text-sm text-slate-500">Chargement des paramètres...</p>
-      </section>
+      <>
+        <section className="card">
+          <p className="text-sm text-slate-500">Chargement des paramètres...</p>
+        </section>
+        <SupportContacts />
+      </>
     );
   }
 
   if (loadError)
     return (
-      <section className="card">
-        <h2 className="font-semibold">Paramètres indisponibles</h2>
-        <p className="mt-2 text-sm text-slate-500">
-          La connexion n’a pas abouti. Rechargez la page pour réessayer.
-        </p>
-        <button
-          className="btn-secondary mt-4"
-          onClick={() => window.location.reload()}
-        >
-          Réessayer
-        </button>
-      </section>
+      <>
+        <section className="card">
+          <h2 className="font-semibold">Paramètres indisponibles</h2>
+          <p className="mt-2 text-sm text-slate-500">
+            La connexion n’a pas abouti. Rechargez la page pour réessayer.
+          </p>
+          <button
+            className="btn-secondary mt-4"
+            onClick={() => window.location.reload()}
+          >
+            Réessayer
+          </button>
+        </section>
+        <SupportContacts />
+      </>
     );
   const tabs = [
     ["identity", "Identité", Building2],
@@ -580,6 +661,7 @@ export default function SettingsPage() {
           </button>
         </div>
       </form>
+      <SupportContacts />
     </div>
   );
 }

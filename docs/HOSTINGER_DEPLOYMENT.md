@@ -83,6 +83,51 @@ production chargé. Changer le lien `current` et redémarrer `konzocrm`.
 Ne pas relancer l'installateur initial. Un retour au code précédent doit tenir
 compte de la compatibilité des migrations, sans écraser des données nouvelles.
 
+## Déploiement automatique GitHub
+
+Le workflow `.github/workflows/deploy.yml` teste les pull requests et les pushes
+sur `main` : tests serveur avec PostgreSQL 16 isolé, tests frontend, build Vite,
+validation Bash. Seul `main` peut déclencher le déploiement ; les secrets SSH
+sont utilisés dans un job séparé qui n'exécute aucune dépendance du repository.
+Les actions GitHub utilisées sont fixées par SHA.
+
+Le job appelle `konzocrm-deploy@76.13.115.72` avec `deploy <SHA>`. Sa clé est
+distincte de la clé SSH administrateur, sans terminal, transfert de ports ni
+commande arbitraire. La clé privée et la clé publique du serveur vérifiée via
+l'accès SSH existant sont dans les secrets GitHub `KONZOCRM_DEPLOY_KEY` et
+`KONZOCRM_KNOWN_HOSTS`. Aucun secret de production DB/MFA/SMTP n'est dans GitHub.
+
+La commande forcée utilise `/usr/local/sbin/konzocrm-deploy-gateway`, appartenant
+à root. Elle vérifie que le SHA est le dernier commit de `main`, prend un verrou,
+récupère le code public depuis GitHub et construit la release sans privilèges
+root ni accès aux secrets de production. Une seconde vérification de `main`
+évite d'activer une version dépassée pendant sa construction.
+
+Après validation des migrations à blanc, elle sauvegarde la base, les uploads
+et l'environnement, arrête brièvement l'API, applique les migrations avec le
+compte du service, change atomiquement le lien `current`, redémarre et vérifie
+la base via l'API, HTTPS et la page de connexion. La construction ne coupe pas
+le site ; le redémarrage peut produire une brève interruption de l'API.
+
+Si l'activation échoue, le code précédent est réactivé. Les migrations validées
+restent en place : on ne restaure pas automatiquement une ancienne base, ce qui
+pourrait supprimer des données nouvelles. Les migrations doivent donc rester
+additives et compatibles avec la version précédente. Les anciennes releases
+et sauvegardes sont conservées ; prévoir leur nettoyage encadré à long terme.
+
+Deux déploiements ne tournent pas simultanément et un déploiement en cours n'est
+pas annulé par un nouveau push. Les versions intermédiaires devenues obsolètes
+peuvent être ignorées : le dernier `main` validé est l'objectif.
+
+Les configurations root (Nginx, systemd, cron, gateway) et les secrets ne sont
+pas remplacés automatiquement par le code du repository. Leur évolution reste
+une opération d'administration explicite. Pour installer ou remplacer le
+gateway avec la clé publique dédiée transférée dans `/root/konzocrm-transfer`,
+utiliser `deploy/setup-auto-deploy.sh` via l'accès administrateur.
+
+Suivi : `https://github.com/Konzopro7/Konzo_one/actions`.
+Le SHA en production est dans `/opt/konzocrm/current/.deployed-commit`.
+
 Les sauvegardes sur le VPS protègent contre une erreur de déploiement. Prévoir
 aussi une copie hors VPS et une politique de conservation avant l'exploitation
 commerciale. Aucun effacement automatique des sauvegardes n'est configuré.

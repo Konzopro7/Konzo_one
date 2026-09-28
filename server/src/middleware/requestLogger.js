@@ -65,7 +65,7 @@ export function requestLogger(req, res, next) {
       return;
     }
 
-    if (!user.agencyId || req.originalUrl.startsWith("/api/payments/webhook") || /^\/api\/auth\/(login|register|mfa)(\/|$|\?)/.test(req.originalUrl)) {
+    if (!user.agencyId || req.originalUrl.startsWith("/api/payments/webhook") || /^\/api\/auth\/(login|register|mfa|forgot-password|reset-password)(\/|$|\?)/.test(req.originalUrl)) {
       return;
     }
 

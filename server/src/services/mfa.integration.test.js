@@ -10,6 +10,7 @@ import pool from "../db.js";
 import auth from "../routes/auth.js";
 import audit from "../routes/audit.js";
 import platform from "../routes/platform.js";
+import { issuePasswordReset, requestPasswordReset } from "./passwordReset.js";
 
 test("PostgreSQL/HTTP: mandatory MFA, enrollment, replay, recovery, lockout and tenant audit", { skip: !process.env.TEST_DATABASE_URL }, async t => {
   const db = new pg.Client({ connectionString: process.env.TEST_DATABASE_URL });
@@ -30,6 +31,7 @@ test("PostgreSQL/HTTP: mandatory MFA, enrollment, replay, recovery, lockout and 
     await db.query("INSERT INTO users(agency_id,full_name,email,password_hash,role) VALUES (1,'Owner','owner@example.test',$1,'admin'),(2,'Other','other@example.test',$1,'admin')", [passwordHash]);
     const migration = await readFile(new URL("../../sql/migrations/2026-09-27-mandatory-mfa.sql",import.meta.url),"utf8");
     await db.query(migration.replace("CREATE TABLE auth_challenges", "CREATE TEMP TABLE auth_challenges"));
+    await db.query((await readFile(new URL("../../sql/migrations/2026-09-28-password-reset.sql",import.meta.url),"utf8")).replace("CREATE TABLE password_reset_tokens", "CREATE TEMP TABLE password_reset_tokens"));
     assert.equal((await db.query("SELECT COUNT(*)::INT AS n FROM users WHERE mfa_enabled=false")).rows[0].n,2);
     t.mock.method(pool,"query",(sql,params) => db.query(sql,params));
     t.mock.method(pool,"connect",async () => ({ query: (sql,params) => db.query(sql,params), release() {} }));
@@ -81,10 +83,57 @@ test("PostgreSQL/HTTP: mandatory MFA, enrollment, replay, recovery, lockout and 
     assert.ok(failures.data.items.length>0); assert.ok(failures.data.items.every(row => !row.success));
     const registered = await post("/auth/register",{ agencyName:"New Agency",fullName:"New User",email:"new@example.test",password });
     assert.equal(registered.status,201); assert.equal(registered.data.enrollmentRequired,true); assert.equal(registered.data.token,undefined);
+    // Password recovery never issues an access token or disables MFA.
+    const req = { path:"/forgot-password",headers:{},ip:"127.0.0.1" };
+    const reset = await issuePasswordReset("owner@example.test",req);
+    const obsoleteChallenge = (await login()).data;
+    assert.ok(reset);
+    assert.equal(await issuePasswordReset("owner@example.test",req),null);
+    assert.equal(await issuePasswordReset("missing@example.test",req),null);
+    const tokenRow = (await db.query("SELECT token_hash FROM password_reset_tokens")).rows[0];
+    assert.ok(tokenRow.token_hash !== reset.token);
+    assert.equal((await post("/auth/reset-password",{ token:reset.token,password:"New-fixture-password!",confirmPassword:"Mismatch" })).status,400);
+    const changed = await post("/auth/reset-password",{ token:reset.token,password:"New-fixture-password!",confirmPassword:"New-fixture-password!" });
+    assert.equal(changed.status,200); assert.equal(changed.data.token,undefined);
+    assert.equal((await get("/auth/me",success.data.token)).status,401);
+    assert.equal((await post("/auth/mfa/verify",{ ...obsoleteChallenge,code:success.data.recoveryCodes[2] })).status,401);
+    assert.equal((await post("/auth/reset-password",{ token:reset.token,password:"Again-fixture-password!",confirmPassword:"Again-fixture-password!" })).status,400);
+    assert.equal((await login()).status,401);
+    const freshLogin = (await post("/auth/login",{ email:"  OWNER@example.test  ",password:"New-fixture-password!" })).data;
+    assert.equal(freshLogin.mfaRequired,true); assert.equal(freshLogin.enrollmentRequired,false);
+    const freshSession = (await post("/auth/mfa/verify",{ ...freshLogin,code:success.data.recoveryCodes[2] })).data;
+    assert.equal((await get("/auth/me",freshSession.token)).status,200);
+    const expired = await issuePasswordReset("owner@example.test",req,{ operator:true });
+    await db.query("UPDATE password_reset_tokens SET expires_at=NOW()-INTERVAL '1 second' WHERE consumed=false");
+    assert.equal((await post("/auth/reset-password",{ token:expired.token,password:"Again-fixture-password!",confirmPassword:"Again-fixture-password!" })).status,400);
+    // An inactive or moved account cannot consume a recovery token.
+    const inactive = await issuePasswordReset("owner@example.test",req,{ operator:true });
+    await db.query("UPDATE users SET is_active=false WHERE id=1");
+    assert.equal((await post("/auth/reset-password",{ token:inactive.token,password:"Again-fixture-password!",confirmPassword:"Again-fixture-password!" })).status,400);
+    await db.query("UPDATE users SET is_active=true,agency_id=2 WHERE id=1");
+    assert.equal((await post("/auth/reset-password",{ token:inactive.token,password:"Again-fixture-password!",confirmPassword:"Again-fixture-password!" })).status,400);
+    await db.query("UPDATE users SET agency_id=1 WHERE id=1");
+    let deliveries=0;
+    const fakeMail = async message => { deliveries++; assert.ok(!message.html.includes("password_hash")); assert.ok(message.html.includes("reset-password#token=")); };
+    await requestPasswordReset("new@example.test",req,fakeMail);
+    await requestPasswordReset("new@example.test",req,fakeMail);
+    await requestPasswordReset("missing@example.test",req,fakeMail);
+    assert.equal(deliveries,1);
+    const firstRecovery = await issuePasswordReset("new@example.test",req,{ operator:true });
+    assert.equal((await post("/auth/reset-password",{token:firstRecovery.token,password:"First-new-password!",confirmPassword:"First-new-password!"})).status,200);
+    const firstLogin = await post("/auth/login",{email:"new@example.test",password:"First-new-password!"});
+    assert.equal(firstLogin.data.enrollmentRequired,true);
+    assert.equal(firstLogin.data.token,undefined);
+    await assert.rejects(() => requestPasswordReset("other@example.test",req,async () => { throw Error("offline"); }));
+    assert.equal((await db.query("SELECT COUNT(*)::INT AS n FROM password_reset_tokens WHERE user_id=2 AND consumed=false")).rows[0].n,0);
+    const smtp = process.env.SMTP_HOST; delete process.env.SMTP_HOST;
+    assert.equal((await post("/auth/forgot-password",{email:"owner@example.test"})).status,503);
+    assert.equal((await post("/auth/forgot-password",{email:"missing@example.test"})).status,503);
+    if (smtp !== undefined) process.env.SMTP_HOST=smtp;
     await db.query("UPDATE users SET role='readonly' WHERE id=1");
-    assert.equal((await get("/audit/security",success.data.token)).status,403);
+    assert.equal((await get("/audit/security",freshSession.token)).status,403);
     process.env.SUPER_ADMIN_EMAILS = "other@example.test";
-    assert.equal((await get("/platform/security",success.data.token)).status,403);
+    assert.equal((await get("/platform/security",freshSession.token)).status,403);
   } finally {
     if (listener) await new Promise(resolve => listener.close(resolve));
     await db.end();

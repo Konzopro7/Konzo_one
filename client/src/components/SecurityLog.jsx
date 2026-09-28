@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../lib/api.js";
 
-const labels = { AUTH_OK: "Connexion réussie", AUTH_FAIL: "Connexion refusée", MFA_FAIL: "Code refusé", MFA_ENROLLED: "Double authentification activée", RECOVERY_USED: "Code de secours utilisé" };
+const labels = { AUTH_OK: "Connexion réussie", AUTH_FAIL: "Connexion refusée", MFA_FAIL: "Code refusé", MFA_ENROLLED: "Double authentification activée", RECOVERY_USED: "Code de secours utilisé", RESET_REQUESTED: "Réinitialisation demandée", RESET_EMAIL_SENT: "Email de récupération envoyé", RESET_EMAIL_FAIL: "Email de récupération refusé", PASSWORD_RESET: "Mot de passe réinitialisé" };
 export default function SecurityLog({ endpoint, platform = false }) {
   const [page, setPage] = useState(1);
   const [result, setResult] = useState("");

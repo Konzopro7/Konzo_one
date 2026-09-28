@@ -20,7 +20,7 @@ await writeFile(
 export function useAuth() { return globalThis.__workspaceTest.auth; }
 export function useTour() { return globalThis.__workspaceTest.tour || {startTour() {}}; }
 export const api = {
- post: async (path, data) => { globalThis.__workspaceTest.posted = {path,data}; if(globalThis.__workspaceTest.failPost) throw {response:{data:{message:'Code refusé'}}}; return {data: path.endsWith('/setup') ? {secret:'FIXTURE',qrCode:'data:image/png;base64,fixture'} : globalThis.__workspaceTest.mfaSession}; },
+ post: async (path, data) => { globalThis.__workspaceTest.posted = {path,data}; if(globalThis.__workspaceTest.failPost) throw {response:{data:{message:globalThis.__workspaceTest.postError || 'Code refusé'}}}; return {data: path.endsWith('/setup') ? {secret:'FIXTURE',qrCode:'data:image/png;base64,fixture'} : path.includes('password') ? {message:'Demande traitée'} : globalThis.__workspaceTest.mfaSession}; },
  get: async path => { if(globalThis.__workspaceTest.failLoad) throw Error('offline'); return {data: path === '/clients' ? globalThis.__workspaceTest.clients : path.startsWith('/clients/') ? globalThis.__workspaceTest.clientDetail : globalThis.__workspaceTest.settings}; },
  put: async (path, data) => { globalThis.__workspaceTest.saved = {path, data}; return {data}; }
 };
@@ -89,13 +89,14 @@ const { default: Profile } = await import(
   pathToFileURL(await compile(path.join(root, "src/pages/ProfilePage.jsx")))
 );
 const { default: MfaLogin } = await import(pathToFileURL(await compile(path.join(root, "src/components/MfaLogin.jsx"))));
+const { default: PasswordRecovery } = await import(pathToFileURL(await compile(path.join(root, "src/components/PasswordRecovery.jsx"))));
 let view;
-async function render(Component, props = {}) {
+async function render(Component, props = {}, initialEntries = ["/"]) {
   await act(async () => {
     view = create(
       React.createElement(
         MemoryRouter,
-        { future: { v7_startTransition: true, v7_relativeSplatPath: true } },
+        { initialEntries, future: { v7_startTransition: true, v7_relativeSplatPath: true } },
         React.createElement(Component, props),
       ),
     );
@@ -174,6 +175,51 @@ test("password login transitions to MFA without granting a session", async () =>
   const root = await render(Login);
   await act(async () => root.findByType("form").props.onSubmit({preventDefault() {}}));
   assert.ok(root.findByProps({id:"mfa-code"}));
+});
+
+test("forgot password is reachable from login and reports unavailable email delivery", async () => {
+  let root = await render(Login);
+  assert.ok(root.findAllByType("a").some(node => node.props.href === "/forgot-password"));
+  globalThis.__workspaceTest.failPost = true;
+  globalThis.__workspaceTest.postError = "L’envoi d’emails n’est pas configuré.";
+  root = await render(PasswordRecovery,{mode:"forgot"});
+  await act(async () => root.findByProps({id:"recovery-email"}).props.onChange({target:{value:"owner@example.test"}}));
+  await act(async () => root.findByType("form").props.onSubmit({preventDefault() {}}));
+  assert.equal(globalThis.__workspaceTest.posted.path,"/auth/forgot-password");
+  assert.equal(globalThis.__workspaceTest.posted.data.email,"owner@example.test");
+  assert.match(root.findByProps({role:"alert"}).props.children,/configuré/);
+  assert.equal(root.findAllByProps({role:"status"}).length,0);
+});
+
+test("password reset rejects mismatching confirmations and signs out after success", async () => {
+  let loggedOut = 0;
+  globalThis.__workspaceTest.auth.logout = () => loggedOut++;
+  const root = await render(PasswordRecovery,{mode:"reset"},["/reset-password#token="+"a".repeat(64)]);
+  await act(async () => root.findByProps({id:"new-password"}).props.onChange({target:{value:"New-password-123"}}));
+  await act(async () => root.findByProps({id:"confirm-password"}).props.onChange({target:{value:"different"}}));
+  await act(async () => root.findByType("form").props.onSubmit({preventDefault() {}}));
+  assert.match(root.findByProps({role:"alert"}).props.children,/identiques/);
+  assert.equal(globalThis.__workspaceTest.posted,undefined);
+  await act(async () => root.findByProps({id:"confirm-password"}).props.onChange({target:{value:"New-password-123"}}));
+  await act(async () => root.findByType("form").props.onSubmit({preventDefault() {}}));
+  assert.equal(globalThis.__workspaceTest.posted.path,"/auth/reset-password");
+  assert.equal(globalThis.__workspaceTest.posted.data.token.length,64);
+  assert.equal(loggedOut,1);
+  assert.equal(root.findAllByType("form").length,0);
+});
+
+test("missing and expired recovery links show how to request a new link", async () => {
+  let root = await render(PasswordRecovery,{mode:"reset"});
+  assert.match(root.findByProps({role:"alert"}).props.children,/invalide/);
+  assert.equal(root.findAllByType("form").length,0);
+  globalThis.__workspaceTest.failPost = true;
+  globalThis.__workspaceTest.postError = "Lien expiré";
+  root = await render(PasswordRecovery,{mode:"reset"},["/reset-password#token="+"a".repeat(64)]);
+  await act(async () => root.findByProps({id:"new-password"}).props.onChange({target:{value:"New-password-123"}}));
+  await act(async () => root.findByProps({id:"confirm-password"}).props.onChange({target:{value:"New-password-123"}}));
+  await act(async () => root.findByType("form").props.onSubmit({preventDefault() {}}));
+  assert.equal(root.findByProps({role:"alert"}).props.children,"Lien expiré");
+  assert.ok(root.findAllByType("a").some(node => node.props.href === "/forgot-password"));
 });
 after(async () => {
   if (view) act(() => view.unmount());

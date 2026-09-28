@@ -8,6 +8,7 @@
     "start": "node src/server.js",
     "test": "node ../scripts/run-server-tests.mjs",
     "migrate": "node src/migrate.js",
+    "recover:local": "node src/recover-account.js",
     "migrate:baseline": "node src/migrate.js --baseline-existing"
   },
   "dependencies": {

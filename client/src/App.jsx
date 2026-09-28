@@ -41,6 +41,8 @@ export default function App() {
         <Route path="/" element={<PricingPage />} />
         <Route path="/pricing" element={<PricingPage />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/forgot-password" element={<LoginPage recoveryMode="forgot" />} />
+        <Route path="/reset-password" element={<LoginPage recoveryMode="reset" />} />
         <Route path="/portal/:type/:token" element={<ClientPortalPage />} />
 
         <Route element={<ProtectedRoute />}>

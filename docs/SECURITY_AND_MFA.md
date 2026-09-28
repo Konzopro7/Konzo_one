@@ -33,3 +33,23 @@ Les challenges expirés sont supprimés par lots lors des connexions suivantes. 
 Tests unitaires : chiffrement, codes TOTP et rejeu, codes de secours, rejet des anciens JWT, rôles courants et nettoyage des logs. Tests HTTP/PostgreSQL facultatifs via `TEST_DATABASE_URL` : tables temporaires privées, migration additive, inscription et connexion en deux étapes, expiration, blocage, récupération et isolation des journaux. Aucun compte réel n’est inscrit à un facteur par ces tests. Tests React : étape MFA, erreurs et sauvegarde des codes avant connexion. Build Vite requis.
 
 Références techniques : [OWASP MFA](https://cheatsheetseries.owasp.org/cheatsheets/Multifactor_Authentication_Cheat_Sheet.html), [otplib](https://otplib.yeojz.dev/guide/getting-started).
+
+## Mot de passe oublié
+
+Le lien **Mot de passe oublié ?** de `/login` ouvre `/forgot-password`. Après réception de l’email, `/reset-password` permet de saisir et confirmer un nouveau mot de passe. Le lien aléatoire de 256 bits est stocké seulement sous forme de hash, valable vingt minutes et consommé une fois. Son fragment est retiré de l’historique par la page et n’est envoyé ni à Apache ni dans les referrers. Les tokens sont associés à l’utilisateur, son entreprise et son mot de passe courant. Un compte désactivé, déplacé dans une autre entreprise, ou dont le mot de passe a déjà changé ne peut pas consommer l’ancien lien.
+
+La réinitialisation invalide toutes les anciennes sessions et challenges de connexion, mais conserve le secret MFA et les codes de secours existants. Elle ne connecte jamais automatiquement l’utilisateur. La première configuration MFA reste nécessaire pour un compte qui ne l’a pas encore activée. Le nouveau mot de passe doit contenir au moins huit caractères et tenir dans les 72 octets pris en charge par bcrypt.
+
+Configurer **SMTP_HOST**, les identifiants et **SMTP_FROM** dans `server/.env`. Configurer **PUBLIC_CLIENT_URL** avec l’adresse réelle du frontend, sous-chemin inclus : localement `http://localhost/konzotech-one`, en production `https://konzocrm.com`. Cette URL provient uniquement de la configuration serveur, jamais du header Host. La production exige HTTPS. Sans SMTP, l’API retourne une erreur claire pour toute adresse, sans prétendre avoir envoyé un email et sans exposer de lien public de récupération.
+
+Avec SMTP, la réponse publique est identique pour tous les emails. La livraison utilise le service email existant après la réponse HTTP pour éviter de révéler l’existence d’un compte par les délais SMTP. Les demandes sont limitées par IP, à une toutes les 90 secondes par compte et cinq par heure. Si le processus s’arrête avant la livraison, l’utilisateur peut refaire sa demande après le délai ; cette version n’introduit pas de file d’envoi persistante. Un échec de livraison invalide le token et apparaît dans le journal de sécurité. Une notification est aussi envoyée après modification du mot de passe si SMTP est configuré, sans inclure le nouveau mot de passe.
+
+Pour une installation locale sans SMTP, un opérateur ayant accès à la machine peut lancer dans `server` :
+
+```powershell
+npm run recover:local -- --email ADRESSE_DU_COMPTE --file C:\CHEMIN_PRIVE\recuperation.html
+```
+
+Cet outil est interdit en production et pour une base distante. Il crée un fichier HTML privé, jamais publié dans XAMPP ou Git. L’utilisateur l’ouvre pour choisir lui-même son mot de passe. Ne pas partager le fichier et le supprimer après utilisation. Aucun endpoint web ne propose ce contournement de livraison SMTP ; l’outil ne désactive pas MFA.
+
+Référence : [OWASP Forgot Password](https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html).

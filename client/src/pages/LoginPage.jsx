@@ -17,6 +17,7 @@ import {
 import { formatCurrency } from "../lib/format.js";
 import { useAuth } from "../hooks/useAuth.jsx";
 import MfaLogin from "../components/MfaLogin.jsx";
+import PasswordRecovery from "../components/PasswordRecovery.jsx";
 
 const initialLogin = { email: "", password: "" };
 const initialRegister = {
@@ -62,7 +63,7 @@ function PlanPill({ activePlan }) {
   );
 }
 
-export default function LoginPage() {
+export default function LoginPage({ recoveryMode = null }) {
   const { isAuthenticated, login, register } = useAuth();
   const [searchParams] = useSearchParams();
   const redirectAfterAuth = useMemo(
@@ -87,7 +88,7 @@ export default function LoginPage() {
     }));
   }, [searchParams]);
 
-  if (isAuthenticated) {
+  if (isAuthenticated && !recoveryMode) {
     return <Navigate to={redirectAfterAuth} replace />;
   }
 
@@ -172,7 +173,7 @@ export default function LoginPage() {
               Votre activité, du premier échange au paiement.
             </div>
           </div>
-          {mode === "register" && (
+          {mode === "register" && !recoveryMode && (
             <PlanPill activePlan={registerForm.planTier} />
           )}
           <div className="auth-benefits">
@@ -194,18 +195,18 @@ export default function LoginPage() {
           <div className="mb-8">
             <span className="eyebrow">VOTRE ESPACE PROFESSIONNEL</span>
             <h2 className="mt-3 font-heading text-3xl font-semibold tracking-tight text-slate-900">
-              {mode === "login"
+              {recoveryMode ? (recoveryMode === "reset" ? "Choisissez votre mot de passe." : "Retrouvez votre accès.") : mode === "login"
                 ? "Heureux de vous revoir."
                 : "Votre prochaine étape."}
             </h2>
             <p className="mt-3 text-sm leading-6 text-slate-500">
-              {mode === "login"
+              {recoveryMode ? (recoveryMode === "reset" ? "Définissez un nouveau mot de passe pour votre compte." : "Recevez un lien sécurisé pour réinitialiser votre mot de passe.") : mode === "login"
                 ? "Connectez-vous pour retrouver votre équipe et vos projets."
                 : "Créez votre espace et découvrez une nouvelle façon de travailler."}
             </p>
           </div>
 
-          {challenge ? <MfaLogin challenge={challenge} onBack={() => { setChallenge(null); setMode("login"); }} /> : <>
+          {recoveryMode ? <PasswordRecovery key={recoveryMode} mode={recoveryMode} /> : challenge ? <MfaLogin challenge={challenge} onBack={() => { setChallenge(null); setMode("login"); }} /> : <>
           <div className="mb-6 flex rounded-xl border border-slate-200 bg-slate-50 p-1">
             <button
               type="button"
@@ -364,6 +365,7 @@ export default function LoginPage() {
                   : "Démarrer mon essai gratuit"}
             </button>
           </form>
+          {mode === "login" && <div className="mt-4 text-right"><Link to="/forgot-password" className="text-sm font-semibold text-brand-600 hover:underline">Mot de passe oublié ?</Link></div>}
           </>}
 
           <p className="mt-5 flex items-center justify-center gap-2 text-xs text-slate-400">

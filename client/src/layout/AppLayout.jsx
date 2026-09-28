@@ -3,8 +3,10 @@ import { Outlet, useLocation } from "react-router-dom";
 import { useMemo, useState } from "react";
 import Sidebar from "./Sidebar.jsx";
 import Topbar from "./Topbar.jsx";
+import WelcomeGuide from "../components/WelcomeGuide.jsx";
 
 const pageTitles = {
+  "/guide": "Guide de prise en main",
   "/dashboard": "Tableau de bord",
   "/pipeline": "Pipeline commercial",
   "/billing": "Abonnement et plans",
@@ -23,6 +25,7 @@ const pageTitles = {
 };
 
 const pageDescriptions = {
+  "/guide": "Des étapes simples pour prendre vos repères et travailler efficacement.",
   "/dashboard": "Votre activité en un regard. Gardez le cap sur ce qui compte.",
   "/clients": "Des relations durables commencent par un suivi attentif.",
   "/pipeline": "Transformez vos opportunités en nouvelles collaborations.",
@@ -62,6 +65,7 @@ export default function AppLayout() {
           <Outlet />
         </main>
       </div>
+      <WelcomeGuide />
     </div>
   );
 }

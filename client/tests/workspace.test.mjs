@@ -75,6 +75,12 @@ const { default: Login } = await import(
 const { default: Topbar } = await import(
   pathToFileURL(await compile(path.join(root, "src/layout/Topbar.jsx")))
 );
+const { default: Guide } = await import(
+  pathToFileURL(await compile(path.join(root, "src/pages/GuidePage.jsx")))
+);
+const { default: Welcome } = await import(
+  pathToFileURL(await compile(path.join(root, "src/components/WelcomeGuide.jsx")))
+);
 let view;
 async function render(Component, props = {}) {
   await act(async () => {
@@ -297,4 +303,48 @@ test("page search presents a real destination and clears after selection", async
     ui.findByProps({ "aria-label": "Rechercher une page" }).props.value,
     "",
   );
+});
+
+test("guide adapts its destinations and instructions to the user's permissions", async () => {
+  for (const role of ["admin", "commercial", "finance", "readonly"]) {
+    if (view) act(() => view.unmount());
+    globalThis.__workspaceTest.auth.user.role = role;
+    const ui = await render(Guide);
+    const links = ui.findAllByType("a").map(item => item.props.href);
+    assert.equal(links.includes("/settings"), role === "admin");
+    assert.equal(links.includes("/team"), role === "admin");
+    assert.equal(links.includes("/pipeline"), ["admin", "commercial"].includes(role));
+    assert.ok(links.includes("/clients") && links.includes("/invoices"));
+    if (role === "readonly") assert.ok(!JSON.stringify(view.toJSON()).includes("Cliquez sur « Nouveau devis »"));
+  }
+});
+
+test("welcome is only automatic for new accounts, and a failed save can be retried", async () => {
+  let ui = await render(Welcome);
+  assert.equal(ui.findAllByProps({ role: "dialog" }).length, 0);
+  act(() => view.unmount());
+  globalThis.__workspaceTest.auth.user.needsWelcomeGuide = true;
+  let attempts = 0;
+  globalThis.__workspaceTest.auth.dismissWelcomeGuide = async () => {
+    attempts++;
+    if (attempts === 1) throw Error("offline");
+  };
+  ui = await render(Welcome);
+  const later = () => ui.findAllByType("button").find(item => item.children.includes("Plus tard"));
+  await act(async () => later().props.onClick());
+  assert.equal(ui.findAllByProps({ role: "alert" }).length, 1);
+  assert.equal(ui.findAllByProps({ role: "dialog" }).length, 1);
+  await act(async () => later().props.onClick());
+  assert.equal(attempts, 2);
+  assert.equal(ui.findAllByProps({ role: "dialog" }).length, 0);
+});
+
+test("welcome discovery persists the choice before navigating to the guide", async () => {
+  globalThis.__workspaceTest.auth.user.needsWelcomeGuide = true;
+  let saved = false;
+  globalThis.__workspaceTest.auth.dismissWelcomeGuide = async () => { saved = true; };
+  const ui = await render(Welcome);
+  await act(async () => ui.findAllByType("button").find(item => item.children.includes("Découvrir le guide")).props.onClick());
+  assert.equal(saved, true);
+  assert.equal(ui.findAllByProps({ role: "dialog" }).length, 0);
 });

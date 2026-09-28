@@ -2,7 +2,7 @@ import { PRODUCT_NAME } from "../../../shared/brand.mjs";
 import { Link } from "react-router-dom";
 import { navigation, canSee } from "./Sidebar.jsx";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bell, Menu, Search } from "lucide-react";
+import { Bell, BookOpen, Menu, Search } from "lucide-react";
 import toast from "react-hot-toast";
 import api from "../lib/api.js";
 import { useAuth } from "../hooks/useAuth.jsx";
@@ -164,6 +164,10 @@ export default function Topbar({ onOpenSidebar }) {
         </div>
 
         <div className="ml-auto flex items-center gap-3">
+          <Link to="/guide" className="btn-secondary gap-2" aria-label="Ouvrir le guide de prise en main">
+            <BookOpen size={18} aria-hidden="true" />
+            <span className="hidden sm:inline">Guide</span>
+          </Link>
           <div className="relative" ref={panelRef}>
             <button
               type="button"

@@ -58,6 +58,7 @@ function sanitizeUser(user) {
     email: user.email,
     role: user.role,
     isActive: user.is_active,
+    needsWelcomeGuide: user.onboarding_status === "pending",
     isPlatformAdmin: isPlatformAdminEmail(user.email),
     subscription: {
       planTier: user.plan_tier || "pro",
@@ -105,7 +106,7 @@ router.post("/register", async (req, res, next) => {
       const userInsert = await client.query(
         `INSERT INTO users (agency_id, full_name, email, password_hash, role)
          VALUES ($1, $2, $3, $4, 'admin')
-         RETURNING id, agency_id, full_name, email, role, is_active`,
+         RETURNING id, agency_id, full_name, email, role, is_active, onboarding_status`,
         [agency.id, payload.fullName.trim(), email, passwordHash]
       );
       const createdUser = userInsert.rows[0];
@@ -158,6 +159,7 @@ router.post("/login", async (req, res, next) => {
         u.role,
         u.is_active,
         u.password_hash,
+        u.onboarding_status,
         a.name AS agency_name,
         a.plan_tier,
         a.subscription_status,
@@ -202,6 +204,7 @@ router.get("/me", requireAuth, async (req, res, next) => {
         u.email,
         u.role,
         u.is_active,
+        u.onboarding_status,
         a.name AS agency_name,
         a.plan_tier,
         a.subscription_status,
@@ -221,6 +224,20 @@ router.get("/me", requireAuth, async (req, res, next) => {
     }
 
     return res.json({ user: sanitizeUser(rows[0]) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.put("/onboarding", requireAuth, async (req, res, next) => {
+  try {
+    const result = await query(
+      `UPDATE users SET onboarding_status = 'seen'
+       WHERE id = $1 AND agency_id = $2 RETURNING id`,
+      [req.user.id, req.user.agencyId]
+    );
+    if (!result.rows[0]) return res.status(404).json({ message: "User not found." });
+    return res.json({ needsWelcomeGuide: false });
   } catch (error) {
     return next(error);
   }

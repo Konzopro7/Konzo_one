@@ -4,6 +4,7 @@ import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import AppLayout from "./layout/AppLayout.jsx";
 
 const BillingPage = lazy(() => import("./pages/BillingPage.jsx"));
+const GuidePage = lazy(() => import("./pages/GuidePage.jsx"));
 const ClientsPage = lazy(() => import("./pages/ClientsPage.jsx"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage.jsx"));
 const ExpensesPage = lazy(() => import("./pages/ExpensesPage.jsx"));
@@ -45,6 +46,7 @@ export default function App() {
           <Route element={<AppLayout />}>
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/guide" element={<GuidePage />} />
             <Route path="/pipeline" element={<PipelinePage />} />
             <Route path="/quotes" element={<QuotesPage />} />
             <Route path="/invoices" element={<InvoicesPage />} />

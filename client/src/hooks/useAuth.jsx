@@ -54,6 +54,17 @@ export function AuthProvider({ children }) {
     clearSession();
   }
 
+  async function dismissWelcomeGuide() {
+    const currentUserId = user?.id;
+    await api.put("/auth/onboarding");
+    setUser((current) => {
+      if (!current || current.id !== currentUserId) return current;
+      const updated = { ...current, needsWelcomeGuide: false };
+      localStorage.setItem(USER_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  }
+
   useEffect(() => {
     if (!token) {
       setIsBooting(false);
@@ -99,7 +110,8 @@ export function AuthProvider({ children }) {
       isBooting,
       login,
       register,
-      logout
+      logout,
+      dismissWelcomeGuide
     }),
     [token, user, isBooting]
   );

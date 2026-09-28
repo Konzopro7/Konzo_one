@@ -9,18 +9,18 @@ import { requireRole } from "./requireRole.js";
 const account = { id: 1, agency_id: 10, role: "readonly", email: "current@example.test", is_active: true };
 const agency = { plan_tier: "pro", subscription_status: "active" };
 
-async function authenticate(t, { claims = { userId: 1, agencyId: 10, role: "admin", email: "old@example.test" }, user = account, failure, token } = {}) {
+async function authenticate(t, { claims = { userId: 1, agencyId: 10, role: "admin", email: "old@example.test" }, user = account, failure, token, subscription = agency, baseUrl = "/api/clients", path = "/" } = {}) {
   const queries = [];
   t.mock.method(pool, "query", async (sql, params) => {
     queries.push({ sql, params });
     if (failure) throw failure;
     if (sql.includes("FROM users")) return { rows: user ? [user] : [] };
-    if (sql.includes("FROM agencies")) return { rows: [agency] };
+    if (sql.includes("FROM agencies")) return { rows: [subscription] };
     throw new Error("Unexpected query in authentication test");
   });
   const req = {
     headers: { authorization: `Bearer ${token ?? jwt.sign(claims, getJwtSecret(), { expiresIn: "1h" })}` },
-    baseUrl: "/api/clients", path: "/"
+    baseUrl, path
   };
   const res = { statusCode: 200, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } };
   let nextCalled = false;
@@ -39,6 +39,18 @@ test("a downgraded user immediately loses admin permissions despite an old token
   requireRole("admin")(result.req, result.res, () => { permitted = true; });
   assert.equal(permitted, false);
   assert.equal(result.res.statusCode, 403);
+});
+
+test("an inactive subscription can save the welcome preference", async t => {
+  const result = await authenticate(t, { subscription: { subscription_status: "past_due" }, baseUrl: "/api/auth", path: "/onboarding" });
+  assert.equal(result.nextCalled, true);
+  assert.equal(result.res.statusCode, 200);
+});
+
+test("welcome preference exemption does not unlock other routes", async t => {
+  const result = await authenticate(t, { subscription: { subscription_status: "past_due" }, baseUrl: "/api/auth", path: "/onboarding/other" });
+  assert.equal(result.nextCalled, false);
+  assert.equal(result.res.statusCode, 402);
 });
 
 for (const [name, user] of [["disabled", { ...account, is_active: false }], ["deleted", null]]) {

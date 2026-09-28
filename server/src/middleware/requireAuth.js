@@ -6,7 +6,8 @@ import { calcTrialDaysLeft, isSubscriptionAccessible } from "../utils/subscripti
 const EXEMPT_PATH_PREFIXES = ["/api/auth/me", "/api/billing", "/api/platform"];
 
 function isExemptPath(fullPath) {
-  return EXEMPT_PATH_PREFIXES.some((prefix) => fullPath.startsWith(prefix));
+  return fullPath === "/api/auth/onboarding" ||
+    EXEMPT_PATH_PREFIXES.some((prefix) => fullPath.startsWith(prefix));
 }
 
 function buildFullPath(req) {

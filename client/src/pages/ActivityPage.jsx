@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import api from "../lib/api.js";
 import { formatDate } from "../lib/format.js";
+import SecurityLog from "../components/SecurityLog.jsx";
 
 export default function ActivityPage() {
   const [logs, setLogs] = useState([]);
@@ -25,6 +26,7 @@ export default function ActivityPage() {
 
   return (
     <div className="space-y-5">
+      <SecurityLog endpoint="/audit/security" />
       <section className="card">
         <h2 className="font-heading text-xl font-semibold text-slate-900">Journal d'activité</h2>
         <p className="mt-1 text-sm text-slate-500">

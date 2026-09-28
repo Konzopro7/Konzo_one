@@ -40,13 +40,13 @@ export function AuthProvider({ children }) {
 
   async function login(payload) {
     const { data } = await api.post("/auth/login", payload);
-    storeSession(data.token, data.user);
+    if (data.token && data.user) storeSession(data.token, data.user);
     return data;
   }
 
   async function register(payload) {
     const { data } = await api.post("/auth/register", payload);
-    storeSession(data.token, data.user);
+    if (data.token && data.user) storeSession(data.token, data.user);
     return data;
   }
 
@@ -122,6 +122,7 @@ export function AuthProvider({ children }) {
       isBooting,
       login,
       register,
+      completeLogin: (data) => { if (data.token && data.user) storeSession(data.token, data.user); },
       logout,
       dismissWelcomeGuide,
       updateProfile

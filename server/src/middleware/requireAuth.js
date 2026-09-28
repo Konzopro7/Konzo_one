@@ -32,9 +32,8 @@ export async function requireAuth(req, res, next) {
     }
 
     // Tokens identify a user; current database state controls their access.
-    // This also supports legacy tokens without embedded agency or role claims.
     const accountRes = await query(
-      `SELECT id, agency_id, role, email, is_active
+      `SELECT id, agency_id, role, email, is_active, mfa_enabled, mfa_version
        FROM users
        WHERE id = $1`,
       [payload.userId]
@@ -43,6 +42,10 @@ export async function requireAuth(req, res, next) {
     if (!account || !account.is_active ||
         (payload.agencyId != null && payload.agencyId !== account.agency_id)) {
       return res.status(401).json({ message: "Invalid authentication token." });
+    }
+
+    if (!account.mfa_enabled || payload.purpose !== "access" || payload.mfaVerified !== true || payload.mfaVersion !== account.mfa_version) {
+      return res.status(401).json({ code: "MFA_REQUIRED", message: "Reconnectez-vous pour effectuer la double authentification." });
     }
 
     const user = {

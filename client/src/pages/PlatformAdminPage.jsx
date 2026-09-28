@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import SecurityLog from "../components/SecurityLog.jsx";
 import {
   BarElement,
   CategoryScale,
@@ -132,6 +133,7 @@ export default function PlatformAdminPage() {
         <p className="mt-1 text-sm text-slate-500">
           Vue globale de la croissance, des abonnements et du trafic de ton SaaS.
         </p>
+        <p className="mt-2 text-sm text-slate-500">Double authentification configurée : {payload.metrics.protectedUsers ?? 0} / {payload.metrics.activeUsers} utilisateurs actifs.</p>
       </section>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
@@ -246,6 +248,7 @@ export default function PlatformAdminPage() {
           </div>
         </article>
       </section>
+      <SecurityLog endpoint="/platform/security" platform />
     </div>
   );
 }

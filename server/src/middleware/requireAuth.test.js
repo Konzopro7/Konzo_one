@@ -6,10 +6,10 @@ import { getJwtSecret } from "../utils/jwtSecret.js";
 import { requireAuth } from "./requireAuth.js";
 import { requireRole } from "./requireRole.js";
 
-const account = { id: 1, agency_id: 10, role: "readonly", email: "current@example.test", is_active: true };
+const account = { id: 1, agency_id: 10, role: "readonly", email: "current@example.test", is_active: true, mfa_enabled: true, mfa_version: 1 };
 const agency = { plan_tier: "pro", subscription_status: "active" };
 
-async function authenticate(t, { claims = { userId: 1, agencyId: 10, role: "admin", email: "old@example.test" }, user = account, failure, token, subscription = agency, baseUrl = "/api/clients", path = "/" } = {}) {
+async function authenticate(t, { claims = { userId: 1, agencyId: 10, role: "admin", email: "old@example.test", purpose: "access", mfaVerified: true, mfaVersion: 1 }, user = account, failure, token, subscription = agency, baseUrl = "/api/clients", path = "/" } = {}) {
   const queries = [];
   t.mock.method(pool, "query", async (sql, params) => {
     queries.push({ sql, params });
@@ -69,12 +69,22 @@ test("a token for a former agency is rejected", async (t) => {
   assert.equal(result.nextCalled, false);
 });
 
-test("legacy tokens use the active account's current agency and role", async (t) => {
+test("legacy tokens cannot bypass mandatory MFA, even on the me route", async (t) => {
   const result = await authenticate(t, { claims: { userId: 1 } });
-  assert.equal(result.nextCalled, true);
-  assert.equal(result.req.user.agencyId, 10);
-  assert.equal(result.req.user.role, "readonly");
-  assert.deepEqual(result.queries[1].params, [10]);
+  assert.equal(result.nextCalled, false);
+  assert.equal(result.res.statusCode, 401);
+  assert.equal(result.res.body.code, "MFA_REQUIRED");
+});
+
+for (const [name, claims, user] of [
+  ["password-only", { purpose: "access", mfaVerified: false, mfaVersion: 1 }, account],
+  ["outdated factor", { purpose: "access", mfaVerified: true, mfaVersion: 0 }, account],
+  ["unenrolled", { purpose: "access", mfaVerified: true, mfaVersion: 1 }, { ...account, mfa_enabled: false }],
+  ["wrong purpose", { purpose: "challenge", mfaVerified: true, mfaVersion: 1 }, account]
+]) test(`${name} cannot use an access token`, async t => {
+  const result = await authenticate(t, { claims: { userId: 1, agencyId: 10, ...claims }, user, baseUrl: "/api/auth", path: "/me" });
+  assert.equal(result.res.statusCode, 401);
+  assert.equal(result.nextCalled, false);
 });
 
 test("database failures reach the server error handler instead of becoming invalid credentials", async (t) => {

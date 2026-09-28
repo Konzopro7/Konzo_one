@@ -8,8 +8,17 @@ import { isPlatformAdminEmail } from "../utils/platformAdmin.js";
 import { calcTrialDaysLeft } from "../utils/subscription.js";
 import { ownedImagePath } from "../utils/uploadPaths.js";
 import { access } from "node:fs/promises";
+import { rateLimit } from "express-rate-limit";
+import { startMfaChallenge, setupMfa, verifyMfa } from "../services/mfa.js";
+import { securityAudit } from "../services/securityAudit.js";
 
 const router = Router();
+router.use((req, res, next) => { res.set("Cache-Control", "no-store"); next(); });
+const loginLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, skipSuccessfulRequests: true, standardHeaders: true, legacyHeaders: false, message: { message: "Trop de tentatives. Réessayez dans quinze minutes." } });
+const factorLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 100, standardHeaders: true, legacyHeaders: false, message: { message: "Trop de tentatives. Réessayez dans quinze minutes." } });
+router.use("/login", loginLimit);
+router.use("/register", rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: true, legacyHeaders: false, message: { message: "Trop de créations de comptes. Réessayez plus tard." } }));
+router.use("/mfa", factorLimit);
 
 const registerSchema = z.object({
   agencyName: z.string().min(2, "Agency name is required."),
@@ -61,6 +70,7 @@ function sanitizeUser(user) {
     email: user.email,
     role: user.role,
     isActive: user.is_active,
+    mfaEnabled: Boolean(user.mfa_enabled),
     needsWelcomeGuide: user.onboarding_status === "pending",
     isPlatformAdmin: isPlatformAdminEmail(user.email),
     subscription: {
@@ -109,7 +119,7 @@ router.post("/register", async (req, res, next) => {
       const userInsert = await client.query(
         `INSERT INTO users (agency_id, full_name, email, password_hash, role)
          VALUES ($1, $2, $3, $4, 'admin')
-         RETURNING id, agency_id, full_name, email, role, is_active, onboarding_status, avatar_url`,
+         RETURNING id, agency_id, full_name, email, role, is_active, onboarding_status, avatar_url, password_hash, mfa_enabled, mfa_version`,
         [agency.id, payload.fullName.trim(), email, passwordHash]
       );
       const createdUser = userInsert.rows[0];
@@ -129,11 +139,7 @@ router.post("/register", async (req, res, next) => {
       };
     });
 
-    const token = createAuthToken(user);
-    return res.status(201).json({
-      token,
-      user: sanitizeUser(user)
-    });
+    return res.status(201).json(await startMfaChallenge(user));
   } catch (error) {
     if (error.status) {
       return res.status(error.status).json({ message: error.message });
@@ -162,6 +168,8 @@ router.post("/login", async (req, res, next) => {
         u.role,
         u.is_active,
         u.password_hash,
+        u.mfa_enabled,
+        u.mfa_version,
         u.onboarding_status,
         u.avatar_url,
         a.name AS agency_name,
@@ -175,27 +183,49 @@ router.post("/login", async (req, res, next) => {
     );
 
     if (!rows[0]) {
+      await securityAudit(req, "AUTH_FAIL", null, 401);
       return res.status(401).json({ message: "Invalid credentials." });
     }
 
     const user = rows[0];
     if (!user.is_active) {
+      await securityAudit(req, "AUTH_FAIL", user, 403);
       return res.status(403).json({ message: "This account is deactivated." });
     }
 
     const isValid = await bcrypt.compare(parsed.data.password, user.password_hash);
     if (!isValid) {
+      await securityAudit(req, "AUTH_FAIL", user, 401);
       return res.status(401).json({ message: "Invalid credentials." });
     }
 
-    const token = createAuthToken(user);
-    return res.json({
-      token,
-      user: sanitizeUser(user)
-    });
+    req.authActor = { id: user.id, agencyId: user.agency_id };
+    return res.json(await startMfaChallenge(user));
   } catch (error) {
     return next(error);
   }
+});
+
+const challengeSchema = z.object({ challengeToken: z.string().regex(/^[a-f0-9]{64}$/) });
+router.post("/mfa/setup", async (req, res, next) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    const parsed = challengeSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Connexion invalide. Reconnectez-vous." });
+    const result = await setupMfa(parsed.data.challengeToken);
+    return res.status(result.status || 200).json(result);
+  } catch (error) { next(error); }
+});
+router.post("/mfa/verify", async (req, res, next) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    const parsed = challengeSchema.extend({ code: z.string().trim().min(6).max(48) }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Vérifiez votre code de sécurité." });
+    const result = await verifyMfa(parsed.data.challengeToken, parsed.data.code, req);
+    if (result.status) return res.status(result.status).json({ message: result.message });
+    const { rows } = await query("SELECT name AS agency_name, plan_tier, subscription_status, trial_ends_at FROM agencies WHERE id=$1", [result.user.agency_id]);
+    return res.json({ token: createAuthToken(result.user, { mfaVerified: true }), user: sanitizeUser({ ...result.user, ...rows[0] }), ...(result.recoveryCodes ? { recoveryCodes: result.recoveryCodes } : {}) });
+  } catch (error) { next(error); }
 });
 
 router.get("/me", requireAuth, async (req, res, next) => {
@@ -209,6 +239,7 @@ router.get("/me", requireAuth, async (req, res, next) => {
         u.role,
         u.is_active,
         u.onboarding_status,
+        u.mfa_enabled,
         u.avatar_url,
         a.name AS agency_name,
         a.plan_tier,

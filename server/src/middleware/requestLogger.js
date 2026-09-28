@@ -1,12 +1,11 @@
 import { query } from "../db.js";
 
 function normalizeIp(req) {
-  const forwarded = String(req.headers["x-forwarded-for"] || "")
-    .split(",")
-    .map((entry) => entry.trim())
-    .filter(Boolean)[0];
+  return req.ip || req.socket?.remoteAddress || null;
+}
 
-  return forwarded || req.socket?.remoteAddress || null;
+function safePath(req) {
+  return String(req.originalUrl || "").split("?")[0].replace(/(\/api\/portal\/(?:quotes|invoices)\/)[^/]+/, "$1[redacted]").slice(0,255);
 }
 
 function resolveAuditTarget(req) {
@@ -34,7 +33,7 @@ export function requestLogger(req, res, next) {
     }
 
     const durationMs = Math.max(0, Date.now() - startedAt);
-    const user = req.user || {};
+    const user = req.user || req.authActor || {};
 
     query(
       `INSERT INTO api_request_logs (
@@ -52,7 +51,7 @@ export function requestLogger(req, res, next) {
         user.agencyId || null,
         user.id || null,
         req.method || "GET",
-        req.originalUrl.slice(0, 255),
+        safePath(req),
         Number(res.statusCode || 0),
         Number(durationMs),
         normalizeIp(req),
@@ -66,7 +65,7 @@ export function requestLogger(req, res, next) {
       return;
     }
 
-    if (!user.agencyId || req.originalUrl.startsWith("/api/payments/webhook")) {
+    if (!user.agencyId || req.originalUrl.startsWith("/api/payments/webhook") || /^\/api\/auth\/(login|register|mfa)(\/|$|\?)/.test(req.originalUrl)) {
       return;
     }
 
@@ -89,7 +88,7 @@ export function requestLogger(req, res, next) {
         String(req.method || "GET"),
         target.entityType,
         target.entityId,
-        req.originalUrl.slice(0, 255),
+        safePath(req),
         Number(res.statusCode || 0),
         JSON.stringify({
           bodyKeys: req.body && typeof req.body === "object" ? Object.keys(req.body).slice(0, 12) : []

@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { formatCurrency } from "../lib/format.js";
 import { useAuth } from "../hooks/useAuth.jsx";
+import MfaLogin from "../components/MfaLogin.jsx";
 
 const initialLogin = { email: "", password: "" };
 const initialRegister = {
@@ -70,6 +71,7 @@ export default function LoginPage() {
   );
   const [mode, setMode] = useState(() => parseMode(searchParams));
   const [loading, setLoading] = useState(false);
+  const [challenge, setChallenge] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [loginForm, setLoginForm] = useState(initialLogin);
   const [registerForm, setRegisterForm] = useState(() => ({
@@ -93,12 +95,11 @@ export default function LoginPage() {
     event.preventDefault();
     setLoading(true);
     try {
-      if (mode === "login") {
-        await login(loginForm);
-        toast.success("Connexion réussie.");
-      } else {
-        await register(registerForm);
-        toast.success("Compte créé avec succès.");
+      const data = mode === "login" ? await login(loginForm) : await register(registerForm);
+      if (data.mfaRequired) {
+        setChallenge(data);
+        setLoginForm(prev => ({ ...prev, password: "" }));
+        setRegisterForm(prev => ({ ...prev, password: "" }));
       }
     } catch (error) {
       toast.error(
@@ -204,6 +205,7 @@ export default function LoginPage() {
             </p>
           </div>
 
+          {challenge ? <MfaLogin challenge={challenge} onBack={() => { setChallenge(null); setMode("login"); }} /> : <>
           <div className="mb-6 flex rounded-xl border border-slate-200 bg-slate-50 p-1">
             <button
               type="button"
@@ -362,6 +364,7 @@ export default function LoginPage() {
                   : "Démarrer mon essai gratuit"}
             </button>
           </form>
+          </>}
 
           <p className="mt-5 flex items-center justify-center gap-2 text-xs text-slate-400">
             <ShieldCheck size={14} />

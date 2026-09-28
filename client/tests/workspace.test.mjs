@@ -20,6 +20,7 @@ await writeFile(
 export function useAuth() { return globalThis.__workspaceTest.auth; }
 export function useTour() { return globalThis.__workspaceTest.tour || {startTour() {}}; }
 export const api = {
+ post: async (path, data) => { globalThis.__workspaceTest.posted = {path,data}; if(globalThis.__workspaceTest.failPost) throw {response:{data:{message:'Code refusé'}}}; return {data: path.endsWith('/setup') ? {secret:'FIXTURE',qrCode:'data:image/png;base64,fixture'} : globalThis.__workspaceTest.mfaSession}; },
  get: async path => { if(globalThis.__workspaceTest.failLoad) throw Error('offline'); return {data: path === '/clients' ? globalThis.__workspaceTest.clients : path.startsWith('/clients/') ? globalThis.__workspaceTest.clientDetail : globalThis.__workspaceTest.settings}; },
  put: async (path, data) => { globalThis.__workspaceTest.saved = {path, data}; return {data}; }
 };
@@ -87,6 +88,7 @@ const { default: Welcome } = await import(
 const { default: Profile } = await import(
   pathToFileURL(await compile(path.join(root, "src/pages/ProfilePage.jsx")))
 );
+const { default: MfaLogin } = await import(pathToFileURL(await compile(path.join(root, "src/components/MfaLogin.jsx"))));
 let view;
 async function render(Component, props = {}) {
   await act(async () => {
@@ -128,6 +130,50 @@ beforeEach(() => {
       },
     ],
   };
+});
+
+test("MFA enrollment verifies the code and waits for recovery-code acknowledgement before signing in", async () => {
+  let signedIn = 0;
+  globalThis.__workspaceTest.auth.completeLogin = data => { assert.equal(data.token,"fixture-access"); signedIn++; };
+  globalThis.__workspaceTest.mfaSession = { token:"fixture-access",user:{},recoveryCodes:["ABCD-EFGH"] };
+  const root = await render(MfaLogin,{ challenge:{ challengeToken:"fixture-challenge",enrollmentRequired:true },onBack() {} });
+  assert.equal(globalThis.__workspaceTest.posted.path,"/auth/mfa/setup");
+  assert.ok(root.findByType("img").props.src.startsWith("data:image/png"));
+  await act(async () => root.findByProps({id:"mfa-code"}).props.onChange({target:{value:"123456"}}));
+  await act(async () => root.findByType("form").props.onSubmit({preventDefault() {}}));
+  assert.equal(globalThis.__workspaceTest.posted.data.code,"123456");
+  assert.equal(signedIn,0);
+  const enter = () => root.findAllByType("button").find(button => button.props.children === "Accéder à mon espace");
+  assert.equal(enter().props.disabled,true);
+  await act(async () => root.findByProps({type:"checkbox"}).props.onChange({target:{checked:true}}));
+  assert.equal(enter().props.disabled,false);
+  await act(async () => enter().props.onClick());
+  assert.equal(signedIn,1);
+});
+
+test("MFA failures preserve the login stage and recovery codes can complete a normal login", async () => {
+  let signedIn = 0;
+  globalThis.__workspaceTest.auth.completeLogin = () => signedIn++;
+  globalThis.__workspaceTest.failPost = true;
+  const root = await render(MfaLogin,{ challenge:{challengeToken:"fixture",enrollmentRequired:false},onBack() {} });
+  await act(async () => root.findByProps({id:"mfa-code"}).props.onChange({target:{value:"123456"}}));
+  await act(async () => root.findByType("form").props.onSubmit({preventDefault() {}}));
+  assert.equal(root.findByProps({role:"alert"}).props.children,"Code refusé");
+  assert.equal(signedIn,0);
+  await act(async () => root.findAllByType("button").find(b => b.props.children === "Utiliser un code de secours").props.onClick());
+  assert.equal(root.findByProps({id:"mfa-code"}).props.inputMode,"text");
+  globalThis.__workspaceTest.failPost = false;
+  globalThis.__workspaceTest.mfaSession = {token:"fixture",user:{}};
+  await act(async () => root.findByProps({id:"mfa-code"}).props.onChange({target:{value:"ABCD-EFGH"}}));
+  await act(async () => root.findByType("form").props.onSubmit({preventDefault() {}}));
+  assert.equal(signedIn,1);
+});
+
+test("password login transitions to MFA without granting a session", async () => {
+  globalThis.__workspaceTest.auth.login = async () => ({mfaRequired:true,enrollmentRequired:false,challengeToken:"fixture"});
+  const root = await render(Login);
+  await act(async () => root.findByType("form").props.onSubmit({preventDefault() {}}));
+  assert.ok(root.findByProps({id:"mfa-code"}));
 });
 after(async () => {
   if (view) act(() => view.unmount());

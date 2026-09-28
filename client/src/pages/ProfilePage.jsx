@@ -94,6 +94,11 @@ export default function ProfilePage() {
         <button className="btn-primary gap-2" type="submit" disabled={saving || uploading || !dirty}><Save size={16} aria-hidden="true" />{saving ? "Enregistrement…" : "Enregistrer mon profil"}</button>
       </form>
       <aside className="card space-y-4 self-start">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <h2 className="text-sm font-semibold text-slate-900">Sécurité du compte</h2>
+          <p className="mt-1 text-sm text-slate-600">Double authentification {user?.mfaEnabled ? "activée" : "requise à la connexion"}. Conservez vos codes de secours pour accéder au CRM si votre téléphone est indisponible.</p>
+          {isAdmin && <Link to="/activity" className="mt-2 inline-block text-sm text-brand-600 hover:underline">Consulter les connexions de mon entreprise</Link>}
+        </div>
         <h2 className="font-heading text-lg font-semibold text-slate-900">Votre espace de travail</h2>
         <p className="break-words text-sm font-semibold text-slate-700">{user?.agencyName}</p>
         <p className="text-sm text-slate-500">Rôle : {roles[user?.role] || user?.role}</p>

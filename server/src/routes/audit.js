@@ -2,10 +2,14 @@ import { Router } from "express";
 import { query } from "../db.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { requireRole } from "../middleware/requireRole.js";
+import { listSecurityEvents } from "../services/securityAudit.js";
 
 const router = Router();
 
 router.use(requireAuth);
+router.get("/security", requireRole("admin"), async (req, res, next) => {
+  try { res.json(await listSecurityEvents(req, req.user.agencyId)); } catch (error) { next(error); }
+});
 
 router.get("/", requireRole("admin"), async (req, res, next) => {
   try {

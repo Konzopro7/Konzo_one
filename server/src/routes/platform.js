@@ -2,6 +2,7 @@ import { Router } from "express";
 import { query } from "../db.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { isPlatformAdminEmail } from "../utils/platformAdmin.js";
+import { listSecurityEvents } from "../services/securityAudit.js";
 
 const router = Router();
 
@@ -15,6 +16,10 @@ router.use((req, res, next) => {
   }
 
   return next();
+});
+
+router.get("/security", async (req, res, next) => {
+  try { res.json(await listSecurityEvents(req)); } catch (error) { next(error); }
 });
 
 router.get("/overview", async (req, res, next) => {
@@ -35,7 +40,8 @@ router.get("/overview", async (req, res, next) => {
         query(
           `SELECT
             COUNT(*)::INT AS total_users,
-            COUNT(*) FILTER (WHERE is_active = true)::INT AS active_users
+            COUNT(*) FILTER (WHERE is_active = true)::INT AS active_users,
+            COUNT(*) FILTER (WHERE is_active = true AND mfa_enabled = true)::INT AS protected_users
            FROM users`
         ),
         query(
@@ -127,6 +133,7 @@ router.get("/overview", async (req, res, next) => {
         canceled: Number(agencies.canceled || 0),
         totalUsers: Number(users.total_users || 0),
         activeUsers: Number(users.active_users || 0),
+        protectedUsers: Number(users.protected_users || 0),
         proCount,
         premiumCount,
         monthlyRevenueEstimate
@@ -161,4 +168,3 @@ router.get("/overview", async (req, res, next) => {
 });
 
 export default router;
-

@@ -56,6 +56,8 @@ Avant la première utilisation du runner, suivre la procédure de baseline dans 
 
 Les exemples se trouvent dans server/.env.example, client/.env.example et leurs variantes de production. Aucun secret réel n’est versionné. Les webhooks nécessitent leurs secrets de signature.
 
+La double authentification est obligatoire pour tous les comptes CRM. Configurez `MFA_ENCRYPTION_KEY` avant de démarrer l’API et sauvegardez cette clé avec la base. Consultez le [guide administration et sécurité](docs/SECURITY_AND_MFA.md) pour la connexion, les codes de secours et les journaux.
+
 Le nom public **konzoCRM.com** est centralisé dans shared/brand.mjs. Les noms d’agences enregistrés, les logos et le design sont conservés. Les identifiants techniques historiques restent compatibles : base, volume, dépôt GitHub, dossier local et sous-chemin XAMPP.
 
 Le domaine cible est konzocrm.com ; DNS, TLS et configuration des fournisseurs externes constituent une opération de déploiement distincte du renommage.

@@ -27,9 +27,11 @@ import chatbotRoutes from "./routes/chatbot.js";
 import { requestLogger } from "./middleware/requestLogger.js";
 import { startReminderScheduler } from "./services/reminders.js";
 import { assertJwtSecretConfigured } from "./utils/jwtSecret.js";
+import { mfaKey } from "./services/mfa.js";
 
 dotenv.config();
 assertJwtSecretConfigured();
+mfaKey();
 
 const app = express();
 const port = Number(process.env.PORT || 4000);

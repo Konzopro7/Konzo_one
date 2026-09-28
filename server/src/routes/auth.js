@@ -12,7 +12,7 @@ import { rateLimit } from "express-rate-limit";
 import { startMfaChallenge, setupMfa, verifyMfa } from "../services/mfa.js";
 import { securityAudit } from "../services/securityAudit.js";
 import { requestPasswordReset, resetPassword } from "../services/passwordReset.js";
-import { sendEmail } from "../services/mailer.js";
+import { sendEmail, isEmailConfigured } from "../services/mailer.js";
 
 const router = Router();
 router.use((req, res, next) => { res.set("Cache-Control", "no-store"); next(); });
@@ -28,7 +28,7 @@ const newPasswordSchema = z.string().min(8,"Le mot de passe doit contenir au moi
 router.post("/forgot-password", (req, res) => {
   const parsed = z.object({ email: emailSchema }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ message: "Vérifiez votre adresse email." });
-  if (!process.env.SMTP_HOST) return res.status(503).json({ message: "L’envoi d’emails n’est pas encore configuré. Contactez l’administrateur pour récupérer votre accès.", code: "EMAIL_NOT_CONFIGURED" });
+  if (!isEmailConfigured()) return res.status(503).json({ message: "Le service de récupération par email est temporairement indisponible. Contactez support@konzocrm.com pour obtenir de l’aide.", code: "EMAIL_NOT_CONFIGURED" });
   res.status(202).json({ message: "Si cette adresse correspond à un compte actif, un lien de réinitialisation vous sera envoyé. Vérifiez aussi vos courriers indésirables." });
   // Avoid account enumeration through response timing; never return an email preview or token.
   const auditContext = { path: "/forgot-password", ip: req.ip, headers: { "user-agent": req.headers["user-agent"] } };

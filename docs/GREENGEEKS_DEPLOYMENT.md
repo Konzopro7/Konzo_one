@@ -69,7 +69,7 @@ SMTP_PORT=587
 SMTP_SECURE=false
 SMTP_USER=
 SMTP_PASS=
-SMTP_FROM=konzoCRM.com <no-reply@konzotech.agency>
+SMTP_FROM=konzoCRM.com <support@konzocrm.com>
 
 REMINDERS_ENABLED=true
 REMINDERS_CRON=0 */6 * * *

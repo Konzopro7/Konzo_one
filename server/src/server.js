@@ -126,6 +126,7 @@ app.use((req, res) => {
 });
 
 app.use((error, req, res, next) => {
+  if (error.code === 'EMAIL_NOT_CONFIGURED') return res.status(503).json({ message: error.message, code: error.code });
   if (error?.message === "Origin is not allowed.") {
     return res.status(403).json({ message: error.message });
   }

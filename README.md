@@ -32,6 +32,7 @@ Apache et l’API Node doivent être démarrés. Voir le guide ci-dessous.
 - [Démarrage local, sauvegardes, migrations et tests](docs/LOCAL_AND_MIGRATIONS.md)
 - [Déploiement de production](docs/GREENGEEKS_DEPLOYMENT.md)
 - [Stripe, essais et annulation des abonnements](docs/STRIPE_AND_TRIALS.md)
+- [Messagerie GreenGeeks et récupération des comptes](docs/EMAIL_SETUP.md)
 - [Vérification du parcours client](docs/CLIENT_READINESS.md)
 - [Audit, écarts et plan de développement](docs/AUDIT_ET_PLAN_INTEGRATION.md)
 

@@ -5,16 +5,20 @@ dotenv.config();
 
 const { Pool } = pg;
 
+// PostgreSQL DATE values are civil days; serializing local midnight loses a day
+// for some client time zones. TIMESTAMP/TIMESTAMPTZ parsers remain unchanged.
+pg.types.setTypeParser(1082, (value) => value);
+
 const ssl =
   process.env.DB_SSL === "false"
     ? false
     : process.env.NODE_ENV === "production"
-    ? { rejectUnauthorized: false }
-    : false;
+      ? { rejectUnauthorized: false }
+      : false;
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl
+  ssl,
 });
 
 export async function query(text, params = []) {

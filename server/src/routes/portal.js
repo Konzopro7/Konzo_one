@@ -12,7 +12,7 @@ async function fetchSettings(agencyId) {
     `SELECT *
      FROM agency_settings
      WHERE agency_id = $1`,
-    [agencyId]
+    [agencyId],
   );
   return rows[0] || null;
 }
@@ -23,7 +23,7 @@ function mapItem(row) {
     description: row.description,
     unitPrice: Number(row.unit_price || 0),
     quantity: Number(row.quantity || 0),
-    lineTotal: Number(row.line_total || 0)
+    lineTotal: Number(row.line_total || 0),
   };
 }
 
@@ -31,6 +31,7 @@ async function fetchQuoteByToken(token) {
   const { rows } = await query(
     `SELECT
       q.*,
+      (q.valid_until < CURRENT_DATE) AS is_expired,
       c.name AS client_name,
       c.company AS client_company,
       c.email AS client_email,
@@ -38,7 +39,7 @@ async function fetchQuoteByToken(token) {
      FROM quotes q
      INNER JOIN clients c ON c.id = q.client_id
      WHERE q.public_token = $1`,
-    [token]
+    [token],
   );
   const quote = rows[0];
   if (!quote) return null;
@@ -48,7 +49,7 @@ async function fetchQuoteByToken(token) {
      FROM quote_items
      WHERE quote_id = $1
      ORDER BY id ASC`,
-    [quote.id]
+    [quote.id],
   );
 
   return {
@@ -56,6 +57,7 @@ async function fetchQuoteByToken(token) {
     agencyId: quote.agency_id,
     quoteNumber: quote.quote_number,
     status: quote.status,
+    canAccept: quote.status === "sent" && !quote.is_expired,
     issueDate: quote.issue_date,
     validUntil: quote.valid_until,
     subtotal: Number(quote.subtotal || 0),
@@ -69,9 +71,9 @@ async function fetchQuoteByToken(token) {
       name: quote.client_name,
       company: quote.client_company,
       email: quote.client_email,
-      phone: quote.client_phone
+      phone: quote.client_phone,
     },
-    items: itemRes.rows.map(mapItem)
+    items: itemRes.rows.map(mapItem),
   };
 }
 
@@ -86,7 +88,7 @@ async function fetchInvoiceByToken(token) {
      FROM invoices i
      INNER JOIN clients c ON c.id = i.client_id
      WHERE i.payment_link_token = $1`,
-    [token]
+    [token],
   );
   const invoice = rows[0];
   if (!invoice) return null;
@@ -96,7 +98,7 @@ async function fetchInvoiceByToken(token) {
      FROM invoice_items
      WHERE invoice_id = $1
      ORDER BY id ASC`,
-    [invoice.id]
+    [invoice.id],
   );
 
   return {
@@ -116,9 +118,9 @@ async function fetchInvoiceByToken(token) {
       name: invoice.client_name,
       company: invoice.client_company,
       email: invoice.client_email,
-      phone: invoice.client_phone
+      phone: invoice.client_phone,
     },
-    items: itemRes.rows.map(mapItem)
+    items: itemRes.rows.map(mapItem),
   };
 }
 
@@ -135,8 +137,8 @@ router.get("/quotes/:token", async (req, res, next) => {
         email: settings?.agency_email || null,
         phone: settings?.agency_phone || null,
         logoUrl: settings?.logo_url || null,
-        currency: "CAD"
-      }
+        currency: "CAD",
+      },
     });
   } catch (error) {
     return next(error);
@@ -154,7 +156,7 @@ router.post("/quotes/:token/accept", async (req, res, next) => {
          FROM quotes
          WHERE public_token = $1
          FOR UPDATE`,
-        [req.params.token]
+        [req.params.token],
       );
       const quote = quoteRes.rows[0];
       if (!quote) {
@@ -163,19 +165,25 @@ router.post("/quotes/:token/accept", async (req, res, next) => {
         throw error;
       }
 
-      if (!["sent", "accepted"].includes(quote.status) || (quote.status !== "accepted" && quote.is_expired)) {
-        const error = new Error("Ce devis ne peut plus ?tre accept?.");
+      if (
+        !["sent", "accepted"].includes(quote.status) ||
+        (quote.status !== "accepted" && quote.is_expired)
+      ) {
+        const error = new Error("Ce devis ne peut plus être accepté.");
         error.status = 409;
         throw error;
       }
 
-      await client.query("UPDATE quotes SET status = 'accepted' WHERE id = $1", [quote.id]);
+      await client.query(
+        "UPDATE quotes SET status = 'accepted' WHERE id = $1",
+        [quote.id],
+      );
 
       const existingInvoice = await client.query(
         `SELECT invoice_number, payment_link_token
          FROM invoices
          WHERE quote_id = $1 AND agency_id = $2`,
-        [quote.id, quote.agency_id]
+        [quote.id, quote.agency_id],
       );
 
       if (existingInvoice.rows[0]) {
@@ -189,7 +197,7 @@ router.post("/quotes/:token/accept", async (req, res, next) => {
          FROM quote_items
          WHERE quote_id = $1
          ORDER BY id ASC`,
-        [quote.id]
+        [quote.id],
       );
 
       invoiceToken = crypto.randomBytes(16).toString("hex");
@@ -214,15 +222,21 @@ router.post("/quotes/:token/accept", async (req, res, next) => {
           quote.tax_rate,
           quote.tax_amount,
           quote.total,
-          invoiceToken
-        ]
+          invoiceToken,
+        ],
       );
 
       for (const item of items.rows) {
         await client.query(
           `INSERT INTO invoice_items (invoice_id, description, unit_price, quantity, line_total)
            VALUES ($1, $2, $3, $4, $5)`,
-          [invoice.rows[0].id, item.description, item.unit_price, item.quantity, item.line_total]
+          [
+            invoice.rows[0].id,
+            item.description,
+            item.unit_price,
+            item.quantity,
+            item.line_total,
+          ],
         );
       }
     });
@@ -230,10 +244,11 @@ router.post("/quotes/:token/accept", async (req, res, next) => {
     return res.json({
       message: "Devis accepté.",
       invoiceNumber,
-      invoiceToken
+      invoiceToken,
     });
   } catch (error) {
-    if (error.status) return res.status(error.status).json({ message: error.message });
+    if (error.status)
+      return res.status(error.status).json({ message: error.message });
     return next(error);
   }
 });
@@ -254,14 +269,17 @@ router.get("/quotes/:token/pdf", async (req, res, next) => {
         total: quote.total,
         status: quote.status,
         taxRate: quote.taxRate,
-        notes: quote.notes
+        notes: quote.notes,
       },
       items: quote.items,
       client: quote.client,
-      settings
+      settings,
     });
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="${quote.quoteNumber}.pdf"`);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${quote.quoteNumber}.pdf"`,
+    );
     return res.send(buffer);
   } catch (error) {
     return next(error);
@@ -271,7 +289,8 @@ router.get("/quotes/:token/pdf", async (req, res, next) => {
 router.get("/invoices/:token", async (req, res, next) => {
   try {
     const invoice = await fetchInvoiceByToken(req.params.token);
-    if (!invoice) return res.status(404).json({ message: "Facture introuvable." });
+    if (!invoice)
+      return res.status(404).json({ message: "Facture introuvable." });
     const settings = await fetchSettings(invoice.agencyId);
     return res.json({
       type: "invoice",
@@ -281,8 +300,8 @@ router.get("/invoices/:token", async (req, res, next) => {
         email: settings?.agency_email || null,
         phone: settings?.agency_phone || null,
         logoUrl: settings?.logo_url || null,
-        currency: "CAD"
-      }
+        currency: "CAD",
+      },
     });
   } catch (error) {
     return next(error);
@@ -292,7 +311,8 @@ router.get("/invoices/:token", async (req, res, next) => {
 router.get("/invoices/:token/pdf", async (req, res, next) => {
   try {
     const invoice = await fetchInvoiceByToken(req.params.token);
-    if (!invoice) return res.status(404).json({ message: "Facture introuvable." });
+    if (!invoice)
+      return res.status(404).json({ message: "Facture introuvable." });
     const settings = await fetchSettings(invoice.agencyId);
     const buffer = await buildBusinessPdf({
       documentType: "invoice",
@@ -304,14 +324,17 @@ router.get("/invoices/:token/pdf", async (req, res, next) => {
         taxAmount: invoice.taxAmount,
         total: invoice.total,
         status: invoice.status,
-        taxRate: invoice.taxRate
+        taxRate: invoice.taxRate,
       },
       items: invoice.items,
       client: invoice.client,
-      settings
+      settings,
     });
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="${invoice.invoiceNumber}.pdf"`);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${invoice.invoiceNumber}.pdf"`,
+    );
     return res.send(buffer);
   } catch (error) {
     return next(error);

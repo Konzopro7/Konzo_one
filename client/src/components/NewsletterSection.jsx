@@ -100,8 +100,8 @@ export default function NewsletterSection({ prompt = false }) {
               prompt ? "newsletter-prompt-title" : "newsletter-settings-title"
             }
           >
-            {prompt && status?.offerEligible
-              ? "Newsletter : 5 % sur votre premier mois"
+            {prompt
+              ? "Newsletter : 5 % sur le premier mois"
               : "Newsletter konzoCRM.com"}
           </h2>
           <p>
@@ -119,11 +119,13 @@ export default function NewsletterSection({ prompt = false }) {
             Adresse de votre compte :{" "}
             <strong className="break-all">{status.email}</strong>
           </p>
-          {status.offerEligible && (
-            <p className="rounded-xl bg-teal-50 p-4 text-sm leading-6 text-teal-900">
-              {NEWSLETTER_OFFER_TEXT}
-            </p>
-          )}
+          <div className="rounded-xl bg-teal-50 p-4 text-sm leading-6 text-teal-900">
+            <p className="font-semibold">Inscription confirmée : 5 % de réduction sur le premier mois</p>
+            <p className="mt-2">{NEWSLETTER_OFFER_TEXT}</p>
+            {status.offerEligible === false && (
+              <p className="mt-2">Votre entreprise n’est pas éligible à cette offre de premier abonnement. Vous pouvez recevoir la newsletter sans nouvelle remise.</p>
+            )}
+          </div>
           {status.discountReady && (
             <p role="status" className="text-sm text-teal-700">
               Votre remise est disponible et sera appliquée automatiquement au

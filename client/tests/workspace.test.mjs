@@ -602,6 +602,19 @@ test("newsletter waits for explicit consent, submits no recipient IDs and retain
   assert.ok(ui.findAll(node=>node.props.role==="alert").length);
 });
 
+test("newsletter explains the 5 percent offer to existing subscribers without promising an ineligible discount",async()=>{
+  globalThis.__workspaceTest.responses={"/newsletter/status":{status:"not_subscribed",email:"fixture@example.test",offerEligible:false,discountReady:false,emailEnabled:true}};
+  for (const prompt of [true,false]) {
+    const ui=await render(Newsletter,{prompt});
+    const content=JSON.stringify(view.toJSON());
+    assert.ok(content.includes('5 % de réduction sur le premier mois'));
+    assert.ok(content.includes('Votre entreprise n’est pas éligible'));
+    assert.equal(content.includes('Votre remise est disponible'),false);
+    assert.ok(ui.findAllByType('input').length);
+    act(()=>view.unmount());
+  }
+});
+
 test("newsletter login offer respects saved refusal and does not interfere with the welcome guide",async()=>{
   globalThis.__workspaceTest.responses={"/newsletter/status":{status:"not_subscribed",email:"fixture@example.test",promptDismissed:true}};
   const ui=await render(Newsletter,{prompt:true});

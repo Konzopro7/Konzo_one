@@ -7,6 +7,7 @@ import WelcomeGuide from "../components/WelcomeGuide.jsx";
 
 const pageTitles = {
   "/guide": "Guide de prise en main",
+  "/profile": "Mon profil",
   "/dashboard": "Tableau de bord",
   "/pipeline": "Pipeline commercial",
   "/billing": "Abonnement et plans",
@@ -26,6 +27,7 @@ const pageTitles = {
 
 const pageDescriptions = {
   "/guide": "Des étapes simples pour prendre vos repères et travailler efficacement.",
+  "/profile": "Votre identité personnelle et vos informations de compte.",
   "/dashboard": "Votre activité en un regard. Gardez le cap sur ce qui compte.",
   "/clients": "Des relations durables commencent par un suivi attentif.",
   "/pipeline": "Transformez vos opportunités en nouvelles collaborations.",

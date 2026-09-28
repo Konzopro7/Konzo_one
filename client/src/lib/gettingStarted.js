@@ -1,6 +1,10 @@
 // Keep the guide aligned with existing modules and permissions.
 export function gettingStartedSteps(role) {
-  const steps = [];
+  const steps = [{
+    title: "Personnalisez votre profil", path: "/profile", action: "Ouvrir mon profil",
+    description: "Importez une photo ou un logo personnel et vérifiez votre nom affiché. Cliquez sur « Enregistrer mon profil » pour mettre à jour votre compte.",
+    check: "Votre image personnelle apparaît dans le CRM. Le logo des documents se règle dans les paramètres de l’entreprise."
+  }];
   if (role === "admin") steps.push({
     title: "Préparez votre espace", path: "/settings", action: "Ouvrir les paramètres",
     description: "Renseignez les coordonnées de votre entreprise, la devise et les conditions de paiement. Vérifiez les modèles d’emails avant votre premier envoi.",

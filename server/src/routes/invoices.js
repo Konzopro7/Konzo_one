@@ -110,6 +110,7 @@ async function fetchInvoiceById(agencyId, invoiceId) {
 async function fetchSettings(agencyId) {
   const { rows } = await query(
     `SELECT
+      agency_id,
       agency_name,
       agency_email,
       agency_phone,
@@ -416,7 +417,9 @@ router.get("/:id/pdf", async (req, res, next) => {
         dueDate: invoice.dueDate,
         subtotal: invoice.subtotal,
         taxAmount: invoice.taxAmount,
-        total: invoice.total
+        total: invoice.total,
+        status: invoice.status,
+        taxRate: invoice.taxRate
       },
       items: invoice.items,
       client: invoice.client,
@@ -455,7 +458,9 @@ router.post("/:id/send-email", requireRole("admin", "commercial", "finance"), as
         dueDate: invoice.dueDate,
         subtotal: invoice.subtotal,
         taxAmount: invoice.taxAmount,
-        total: invoice.total
+        total: invoice.total,
+        status: invoice.status,
+        taxRate: invoice.taxRate
       },
       items: invoice.items,
       client: invoice.client,

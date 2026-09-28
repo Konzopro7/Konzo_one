@@ -104,7 +104,7 @@ async function fetchPurchaseById(agencyId, purchaseId) {
 
 async function fetchSettings(agencyId) {
   const { rows } = await query(
-    `SELECT agency_name, agency_email, agency_phone, payment_terms, currency, logo_url
+    `SELECT agency_id, agency_name, agency_email, agency_phone, payment_terms, currency, logo_url
      FROM agency_settings
      WHERE agency_id = $1`,
     [agencyId]
@@ -404,7 +404,9 @@ router.get("/:id/pdf", async (req, res, next) => {
         dueDate: purchase.dueDate,
         subtotal: purchase.subtotal,
         taxAmount: purchase.taxAmount,
-        total: purchase.total
+        total: purchase.total,
+        status: purchase.status,
+        taxRate: purchase.taxRate
       },
       items: purchase.items,
       client: purchase.supplier,

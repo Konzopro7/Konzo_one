@@ -65,6 +65,18 @@ export function AuthProvider({ children }) {
     });
   }
 
+  async function updateProfile(payload) {
+    const currentUserId = user?.id;
+    const { data } = await api.put("/auth/profile", payload);
+    setUser((current) => {
+      if (!current || current.id !== currentUserId) return current;
+      const updated = { ...current, fullName: data.fullName, avatarUrl: data.avatarUrl };
+      localStorage.setItem(USER_KEY, JSON.stringify(updated));
+      return updated;
+    });
+    return data;
+  }
+
   useEffect(() => {
     if (!token) {
       setIsBooting(false);
@@ -111,7 +123,8 @@ export function AuthProvider({ children }) {
       login,
       register,
       logout,
-      dismissWelcomeGuide
+      dismissWelcomeGuide,
+      updateProfile
     }),
     [token, user, isBooting]
   );

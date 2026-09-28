@@ -6,6 +6,7 @@ import { Bell, BookOpen, Menu, Search } from "lucide-react";
 import toast from "react-hot-toast";
 import api from "../lib/api.js";
 import { useAuth } from "../hooks/useAuth.jsx";
+import UserAvatar from "../components/UserAvatar.jsx";
 
 const reminderTypeLabels = {
   invoice_due_soon: "Facture bientôt à échéance",
@@ -261,20 +262,18 @@ export default function Topbar({ onOpenSidebar }) {
             ) : null}
           </div>
 
-          <div className="hidden items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm sm:flex">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 font-heading text-sm font-semibold text-brand-600">
-              {(user?.fullName || "K").slice(0, 1).toUpperCase()}
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-slate-800">
+          <Link to="/profile" aria-label="Personnaliser mon profil" className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-2 py-2 shadow-sm sm:max-w-[260px] sm:px-3">
+            <UserAvatar name={user?.fullName} src={user?.avatarUrl} />
+            <div className="hidden min-w-0 sm:block">
+              <p className="truncate text-sm font-semibold text-slate-800" title={user?.fullName}>
                 {user?.fullName || "Admin"}
               </p>
-              <p className="text-xs text-slate-500">
+              <p className="truncate text-xs text-slate-500" title={`${user?.agencyName || PRODUCT_NAME} - ${user?.role || "admin"}`}>
                 {user?.agencyName || PRODUCT_NAME} -{" "}
                 {user?.role || "admin"}
               </p>
             </div>
-          </div>
+          </Link>
         </div>
       </div>
     </header>

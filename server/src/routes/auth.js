@@ -6,6 +6,8 @@ import { requireAuth } from "../middleware/requireAuth.js";
 import { createAuthToken } from "../utils/authToken.js";
 import { isPlatformAdminEmail } from "../utils/platformAdmin.js";
 import { calcTrialDaysLeft } from "../utils/subscription.js";
+import { ownedImagePath } from "../utils/uploadPaths.js";
+import { access } from "node:fs/promises";
 
 const router = Router();
 
@@ -55,6 +57,7 @@ function sanitizeUser(user) {
     agencyId: user.agency_id,
     agencyName: user.agency_name,
     fullName: user.full_name,
+    avatarUrl: user.avatar_url || null,
     email: user.email,
     role: user.role,
     isActive: user.is_active,
@@ -106,7 +109,7 @@ router.post("/register", async (req, res, next) => {
       const userInsert = await client.query(
         `INSERT INTO users (agency_id, full_name, email, password_hash, role)
          VALUES ($1, $2, $3, $4, 'admin')
-         RETURNING id, agency_id, full_name, email, role, is_active, onboarding_status`,
+         RETURNING id, agency_id, full_name, email, role, is_active, onboarding_status, avatar_url`,
         [agency.id, payload.fullName.trim(), email, passwordHash]
       );
       const createdUser = userInsert.rows[0];
@@ -160,6 +163,7 @@ router.post("/login", async (req, res, next) => {
         u.is_active,
         u.password_hash,
         u.onboarding_status,
+        u.avatar_url,
         a.name AS agency_name,
         a.plan_tier,
         a.subscription_status,
@@ -205,6 +209,7 @@ router.get("/me", requireAuth, async (req, res, next) => {
         u.role,
         u.is_active,
         u.onboarding_status,
+        u.avatar_url,
         a.name AS agency_name,
         a.plan_tier,
         a.subscription_status,
@@ -227,6 +232,32 @@ router.get("/me", requireAuth, async (req, res, next) => {
   } catch (error) {
     return next(error);
   }
+});
+
+const profileSchema = z.object({
+  fullName: z.string().trim().min(2, "Le nom doit contenir au moins deux caractères.").max(120),
+  avatarUrl: z.string().url().max(2048).nullable()
+});
+
+router.put("/profile", requireAuth, async (req, res, next) => {
+  try {
+    const parsed = profileSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Vérifiez votre nom et votre image de profil.", issues: parsed.error.flatten() });
+    const { fullName, avatarUrl } = parsed.data;
+    if (avatarUrl) {
+      const file = ownedImagePath(avatarUrl, { agencyId: req.user.agencyId, purpose: "avatar", userId: req.user.id });
+      if (!file) return res.status(400).json({ message: "Importez une image depuis votre propre profil." });
+      try { await access(file); } catch {
+        return res.status(400).json({ message: "Image introuvable. Importez-la à nouveau." });
+      }
+    }
+    const { rows } = await query(
+      `UPDATE users SET full_name = $1, avatar_url = $2 WHERE id = $3 AND agency_id = $4 RETURNING full_name, avatar_url`,
+      [fullName, avatarUrl, req.user.id, req.user.agencyId]
+    );
+    if (!rows[0]) return res.status(404).json({ message: "Utilisateur introuvable." });
+    return res.json({ fullName: rows[0].full_name, avatarUrl: rows[0].avatar_url });
+  } catch (error) { return next(error); }
 });
 
 router.put("/onboarding", requireAuth, async (req, res, next) => {

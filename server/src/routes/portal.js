@@ -60,6 +60,8 @@ async function fetchQuoteByToken(token) {
     validUntil: quote.valid_until,
     subtotal: Number(quote.subtotal || 0),
     taxAmount: Number(quote.tax_amount || 0),
+    taxRate: Number(quote.tax_rate || 0),
+    notes: quote.notes,
     total: Number(quote.total || 0),
     token: quote.public_token,
     client: {
@@ -106,6 +108,7 @@ async function fetchInvoiceByToken(token) {
     dueDate: invoice.due_date,
     subtotal: Number(invoice.subtotal || 0),
     taxAmount: Number(invoice.tax_amount || 0),
+    taxRate: Number(invoice.tax_rate || 0),
     total: Number(invoice.total || 0),
     token: invoice.payment_link_token,
     client: {
@@ -248,7 +251,10 @@ router.get("/quotes/:token/pdf", async (req, res, next) => {
         validUntil: quote.validUntil,
         subtotal: quote.subtotal,
         taxAmount: quote.taxAmount,
-        total: quote.total
+        total: quote.total,
+        status: quote.status,
+        taxRate: quote.taxRate,
+        notes: quote.notes
       },
       items: quote.items,
       client: quote.client,
@@ -296,7 +302,9 @@ router.get("/invoices/:token/pdf", async (req, res, next) => {
         dueDate: invoice.dueDate,
         subtotal: invoice.subtotal,
         taxAmount: invoice.taxAmount,
-        total: invoice.total
+        total: invoice.total,
+        status: invoice.status,
+        taxRate: invoice.taxRate
       },
       items: invoice.items,
       client: invoice.client,

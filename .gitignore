@@ -8,3 +8,5 @@ server/uploads
 .env
 *.log
 .DS_Store
+/tmp/pdfs/
+/output/pdf/

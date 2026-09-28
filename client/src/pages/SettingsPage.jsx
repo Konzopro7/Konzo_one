@@ -83,7 +83,12 @@ export default function SettingsPage() {
 
   async function handleLogoUpload(event) {
     const file = event.target.files?.[0];
-    if (!file) return;
+    if (!file || !isAdmin || uploadingLogo || saving) return;
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) || file.size > 5 * 1024 * 1024) {
+      toast.error("Choisissez une image PNG, JPG ou WebP de 5 Mo maximum.");
+      event.target.value = "";
+      return;
+    }
     setUploadingLogo(true);
     try {
       const uploaded = await uploadFile(file, "logo");
@@ -287,16 +292,17 @@ export default function SettingsPage() {
                     <input
                       type="file"
                       className="sr-only"
-                      accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                      accept="image/png,image/jpeg,image/webp"
                       onChange={handleLogoUpload}
                       disabled={!isAdmin || uploadingLogo}
                     />
                   </label>
                   <p className="mt-2 text-xs text-slate-500">
-                    PNG, JPG, WebP ou SVG · 5 Mo maximum
+                    PNG, JPG ou WebP · 5 Mo maximum
                   </p>
                 </div>
               </div>
+              {form.logoUrl && isAdmin && <button type="button" className="btn-secondary mb-5" disabled={saving || uploadingLogo} onClick={() => update("logoUrl", "")}>Retirer le logo</button>}
               <div className="grid gap-5 sm:grid-cols-2">
                 {field("agencyName", "Nom de l’agence", "text", {
                   required: true,

@@ -107,6 +107,7 @@ async function fetchQuoteById(agencyId, quoteId) {
 async function fetchSettings(agencyId) {
   const { rows } = await query(
     `SELECT
+      agency_id,
       agency_name,
       agency_email,
       agency_phone,
@@ -576,7 +577,10 @@ router.get("/:id/pdf", async (req, res, next) => {
         validUntil: quote.validUntil,
         subtotal: quote.subtotal,
         taxAmount: quote.taxAmount,
-        total: quote.total
+        total: quote.total,
+        status: quote.status,
+        taxRate: quote.taxRate,
+        notes: quote.notes
       },
       items: quote.items,
       client: quote.client,
@@ -635,7 +639,10 @@ router.post("/:id/send-email", requireRole("admin", "commercial"), async (req, r
         validUntil: quote.validUntil,
         subtotal: quote.subtotal,
         taxAmount: quote.taxAmount,
-        total: quote.total
+        total: quote.total,
+        status: quote.status,
+        taxRate: quote.taxRate,
+        notes: quote.notes
       },
       items: quote.items,
       client: quote.client,

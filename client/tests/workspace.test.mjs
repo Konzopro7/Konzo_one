@@ -81,6 +81,9 @@ const { default: Guide } = await import(
 const { default: Welcome } = await import(
   pathToFileURL(await compile(path.join(root, "src/components/WelcomeGuide.jsx")))
 );
+const { default: Profile } = await import(
+  pathToFileURL(await compile(path.join(root, "src/pages/ProfilePage.jsx")))
+);
 let view;
 async function render(Component, props = {}) {
   await act(async () => {
@@ -347,4 +350,39 @@ test("welcome discovery persists the choice before navigating to the guide", asy
   await act(async () => ui.findAllByType("button").find(item => item.children.includes("Découvrir le guide")).props.onClick());
   assert.equal(saved, true);
   assert.equal(ui.findAllByProps({ role: "dialog" }).length, 0);
+});
+
+test("profile saves the display name and photo for read-only users without touching their role", async () => {
+  globalThis.__workspaceTest.auth.isAdmin = false;
+  globalThis.__workspaceTest.auth.user = { fullName: "Camille", role: "readonly", email: "camille@example.invalid", avatarUrl: "https://example.invalid/photo.png" };
+  let submitted;
+  globalThis.__workspaceTest.auth.updateProfile = async payload => { submitted = payload; return payload; };
+  const ui = await render(Profile);
+  assert.equal(ui.findAllByType("a").length, 0);
+  assert.equal(ui.findByProps({ id: "profile-email" }).props.readOnly, true);
+  act(() => ui.findByProps({ id: "profile-name" }).props.onChange({ target: { value: "Camille Martin" } }));
+  await act(async () => ui.findByType("form").props.onSubmit({ preventDefault() {} }));
+  assert.deepEqual(submitted, { fullName: "Camille Martin", avatarUrl: "https://example.invalid/photo.png" });
+  assert.equal(ui.findAllByProps({ role: "status" }).length, 1);
+});
+
+test("profile can remove an image and retains edits after a server error", async () => {
+  globalThis.__workspaceTest.auth.user.avatarUrl = "https://example.invalid/photo.png";
+  globalThis.__workspaceTest.auth.updateProfile = async () => { throw Error("offline"); };
+  const ui = await render(Profile);
+  act(() => ui.findAllByType("button").find(item => item.children.includes("Retirer l’image")).props.onClick());
+  await act(async () => ui.findByType("form").props.onSubmit({ preventDefault() {} }));
+  assert.equal(ui.findAllByType("img").length, 0);
+  assert.equal(ui.findAllByProps({ role: "alert" }).length, 1);
+  assert.equal(ui.findByProps({ type: "submit" }).props.disabled, false);
+});
+
+test("profile upload preview uses the existing uploader and rejects oversized images", async () => {
+  const ui = await render(Profile);
+  const input = ui.findByProps({ "aria-label": "Photo ou logo du profil" });
+  await act(async () => input.props.onChange({ target: { files: [{ type: "image/png", size: 10 }], value: "photo.png" } }));
+  assert.equal(ui.findByType("img").props.src, "/uploads/test.png");
+  await act(async () => input.props.onChange({ target: { files: [{ type: "image/png", size: 6 * 1024 * 1024 }], value: "photo.png" } }));
+  assert.equal(ui.findAllByProps({ role: "alert" }).length, 1);
+  assert.equal(ui.findByType("img").props.src, "/uploads/test.png");
 });

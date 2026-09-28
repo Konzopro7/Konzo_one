@@ -151,7 +151,7 @@ test(
       });
       interval = "month";
       used = true;
-      assert.equal(await newsletterCheckoutDiscount(1, "price_monthly"), null);
+      await assert.rejects(newsletterCheckoutDiscount(1, "price_monthly"), { status: 409 });
       used = false;
       assert.equal(await newsletterCheckoutDiscount(2, "price_monthly"), null);
       await unsubscribeNewsletter(user, req);

@@ -264,7 +264,11 @@ export async function newsletterCheckoutDiscount(agencyId, priceId) {
       coupon.metadata?.agencyId !== String(agencyId)
     )
       throw fail("La configuration de l’offre doit être vérifiée.", 503);
-    if (!coupon.valid || coupon.times_redeemed > 0) return null;
+    if (!coupon.valid || coupon.times_redeemed > 0)
+      throw fail(
+        'Cette remise a déjà été utilisée dans Stripe. Consultez « Gérer ma facturation Stripe » pour terminer votre premier paiement ou contactez facturation@konzocrm.com.',
+        409,
+      );
     await db.query("UPDATE agencies SET newsletter_coupon_id=$1 WHERE id=$2", [
       coupon.id,
       agencyId,

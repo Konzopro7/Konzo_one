@@ -33,7 +33,13 @@ L'export depuis PostgreSQL 18 vers PostgreSQL 16 retire uniquement le paramètre
 secrets MFA après restauration. Les URL locales des logos dans `agency_settings`
 et des avatars dans `users` deviennent `https://konzocrm.com/uploads/...`.
 
-## DNS et HTTPS : étape restante
+## DNS et HTTPS
+
+HTTPS a été activé le 28 septembre 2026 pour `konzocrm.com` et
+`www.konzocrm.com`. Le renouvellement automatique est activé. Les serveurs DNS
+autoritaires répondent avec `76.13.115.72`, et `www` reste un CNAME du domaine
+principal. Certains résolveurs peuvent conserver temporairement l'ancienne
+adresse GreenGeeks à cause du TTL de 14400 secondes.
 
 Au déploiement initial, les serveurs GreenGeeks refusaient les requêtes pour ce
 domaine. Il faut activer sa zone DNS puis configurer :
@@ -41,7 +47,7 @@ domaine. Il faut activer sa zone DNS puis configurer :
 | Type | Nom | Valeur |
 | --- | --- | --- |
 | A | @ | 76.13.115.72 |
-| A | www | 76.13.115.72 |
+| CNAME | www | konzocrm.com |
 
 Ne pas toucher aux MX/TXT de messagerie. Vérifier qu'aucun ancien AAAA pour ces
 deux noms n'envoie les visiteurs vers un autre serveur. La section « Nameserver

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # Only run once both hostnames resolve to this VPS and port 80 is reachable.
-install -d -m 0755 /var/lib/konzocrm/acme
-certbot certonly --webroot -w /var/lib/konzocrm/acme \
+install -d -m 0755 /var/www/konzocrm-acme
+certbot certonly --webroot -w /var/www/konzocrm-acme \
     --cert-name konzocrm.com -d konzocrm.com -d www.konzocrm.com \
     --non-interactive --agree-tos --register-unsafely-without-email
 cp /etc/nginx/sites-available/konzocrm /var/backups/konzocrm/nginx-before-https.conf

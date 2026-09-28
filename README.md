@@ -2,6 +2,9 @@
 
 CRM SaaS multi-agence construit sur React, Express et PostgreSQL. Le projet évolue progressivement en conservant son design, ses données et ses URL.
 
+La version en ligne est accessible sur **[https://konzocrm.com](https://konzocrm.com)**.
+Les adresses `localhost` ci-dessous concernent uniquement le développement sur votre ordinateur.
+
 ## Démarrer
 
 Avec PostgreSQL actif et les fichiers .env existants configurés :
@@ -28,6 +31,8 @@ Apache et l’API Node doivent être démarrés. Voir le guide ci-dessous.
 - [Architecture et organisation du code](docs/ARCHITECTURE.md)
 - [Démarrage local, sauvegardes, migrations et tests](docs/LOCAL_AND_MIGRATIONS.md)
 - [Déploiement de production](docs/GREENGEEKS_DEPLOYMENT.md)
+- [Stripe, essais et annulation des abonnements](docs/STRIPE_AND_TRIALS.md)
+- [Vérification du parcours client](docs/CLIENT_READINESS.md)
 - [Audit, écarts et plan de développement](docs/AUDIT_ET_PLAN_INTEGRATION.md)
 
 Le dossier client contient l’interface ; server contient l’API et SQL ; shared contient l’identité du produit ; scripts et docs regroupent les outils et guides d’exploitation.
@@ -62,4 +67,4 @@ La console propriétaire **Admin SaaS** permet le pilotage et la gestion des esp
 
 Le nom public **konzoCRM.com** est centralisé dans shared/brand.mjs. Les noms d’agences enregistrés, les logos et le design sont conservés. Les identifiants techniques historiques restent compatibles : base, volume, dépôt GitHub, dossier local et sous-chemin XAMPP.
 
-Le domaine cible est konzocrm.com ; DNS, TLS et configuration des fournisseurs externes constituent une opération de déploiement distincte du renommage.
+La production utilise konzocrm.com avec HTTPS et un déploiement automatique après validation des tests sur la branche main. Les paramètres des fournisseurs externes restent privés sur le serveur.

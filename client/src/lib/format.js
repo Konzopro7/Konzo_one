@@ -1,3 +1,4 @@
+import { displayDate, isCivilDate } from "../../../shared/dates.mjs";
 const DEFAULT_CURRENCY = "CAD";
 
 let cachedLocale = null;
@@ -9,7 +10,8 @@ function resolveLocale() {
 
   if (typeof navigator !== "undefined") {
     cachedLocale =
-      (Array.isArray(navigator.languages) && navigator.languages.find(Boolean)) ||
+      (Array.isArray(navigator.languages) &&
+        navigator.languages.find(Boolean)) ||
       navigator.language ||
       "fr-CA";
   } else {
@@ -31,7 +33,7 @@ export function formatCurrency(value, currency) {
   const activeCurrency = currency || DEFAULT_CURRENCY;
   return new Intl.NumberFormat(getLocaleByBrowser(), {
     style: "currency",
-    currency: activeCurrency
+    currency: activeCurrency,
   }).format(Number(value || 0));
 }
 
@@ -39,23 +41,27 @@ export function formatDate(value) {
   if (!value) {
     return "-";
   }
-  return new Date(value).toLocaleDateString(getLocaleByBrowser());
+  return displayDate(value)?.toLocaleDateString(getLocaleByBrowser()) || "-";
 }
 
 export function formatCompactDate(value) {
   if (!value) {
     return "-";
   }
-  const date = new Date(value);
-  return date.toLocaleDateString(getLocaleByBrowser(), {
-    day: "2-digit",
-    month: "short"
-  });
+  const date = displayDate(value);
+  return (
+    date?.toLocaleDateString(getLocaleByBrowser(), {
+      day: "2-digit",
+      month: "short",
+    }) || "-"
+  );
 }
 
 export function toInputDate(value) {
   if (!value) {
     return "";
   }
-  return new Date(value).toISOString().slice(0, 10);
+  if (isCivilDate(value)) return value;
+  const date = displayDate(value);
+  return date ? date.toISOString().slice(0, 10) : "";
 }

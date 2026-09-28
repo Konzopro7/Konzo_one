@@ -6,7 +6,12 @@ import { formatCurrency, formatDate } from "../lib/format.js";
 import Modal from "../components/Modal.jsx";
 import StatusBadge from "../components/StatusBadge.jsx";
 import { useAuth } from "../hooks/useAuth.jsx";
-import ContactFields, { ContactProfile, emptyContactProfile } from "../components/ContactFields.jsx";
+import ContactFields, {
+  ContactProfile,
+  emptyContactProfile,
+} from "../components/ContactFields.jsx";
+import useAsyncAction from "../hooks/useAsyncAction.js";
+import { apiErrorMessage } from "../lib/formErrors.js";
 
 const initialForm = {
   ...emptyContactProfile,
@@ -19,6 +24,7 @@ const initialForm = {
 export default function ClientsPage() {
   const { isAdmin, isCommercial } = useAuth();
   const canWrite = isAdmin || isCommercial;
+  const { busy, runAction } = useAsyncAction();
   const [search, setSearch] = useState("");
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -49,7 +55,10 @@ export default function ClientsPage() {
   useEffect(() => {
     let active = true;
     loadData()
-      .catch(() => { setLoadError(true); toast.error("Impossible de charger les clients."); })
+      .catch(() => {
+        setLoadError(true);
+        toast.error("Impossible de charger les clients.");
+      })
       .finally(() => {
         if (active) {
           setLoading(false);
@@ -70,7 +79,13 @@ export default function ClientsPage() {
     try {
       const { data } = await api.get(`/clients/${client.id}`);
       setActiveClientId(client.id);
-      setForm({ ...initialForm, ...data, company: data.company || "", phone: data.phone || "", tags: (data.tags || []).join(", ") });
+      setForm({
+        ...initialForm,
+        ...data,
+        company: data.company || "",
+        phone: data.phone || "",
+        tags: (data.tags || []).join(", "),
+      });
       setModalOpen(true);
     } catch {
       toast.error("Impossible de charger le client. Réessayez.");
@@ -78,6 +93,7 @@ export default function ClientsPage() {
   }
 
   function closeModal() {
+    if (saving) return;
     setModalOpen(false);
     setActiveClientId(null);
     setForm(initialForm);
@@ -96,12 +112,28 @@ export default function ClientsPage() {
   async function handleSubmit(event) {
     event.preventDefault();
     if (saving || !canWrite) return;
-    const tags = [...new Set(String(form.tags || "").split(",").map(tag => tag.trim()).filter(Boolean))];
-    if (tags.length > 30 || tags.some(tag => tag.length > 50)) {
+    if (form.name.trim().length < 2) {
+      toast.error("Le nom du client doit contenir au moins deux caractères.");
+      return;
+    }
+    const tags = [
+      ...new Set(
+        String(form.tags || "")
+          .split(",")
+          .map((tag) => tag.trim())
+          .filter(Boolean),
+      ),
+    ];
+    if (tags.length > 30 || tags.some((tag) => tag.length > 50)) {
       toast.error("Utilisez au maximum 30 tags de 50 caractères chacun.");
       return;
     }
-    const payload = { ...form, tags, preferredLanguage: form.preferredLanguage || null, crmStatus: form.crmStatus || null };
+    const payload = {
+      ...form,
+      tags,
+      preferredLanguage: form.preferredLanguage || null,
+      crmStatus: form.crmStatus || null,
+    };
     setSaving(true);
     try {
       if (isEditing) {
@@ -111,10 +143,17 @@ export default function ClientsPage() {
         await api.post("/clients", payload);
         toast.success("Client ajouté.");
       }
-      await loadData();
-      closeModal();
+      setModalOpen(false);
+      setActiveClientId(null);
+      setForm(initialForm);
+      await loadData().catch(() => {
+        setLoadError(true);
+        toast.error(
+          "Client enregistré. Impossible d’actualiser la liste. Réessayez.",
+        );
+      });
     } catch (error) {
-      toast.error(error.response?.data?.message || "Action impossible.");
+      toast.error(apiErrorMessage(error));
     } finally {
       setSaving(false);
     }
@@ -149,14 +188,17 @@ export default function ClientsPage() {
               Coordonnées, documents et historique : chaque client a sa place.
             </p>
           </div>
-          {canWrite && <button
-            data-tour="client-create"
-            type="button"
-            onClick={openCreateModal}
-            className="btn-primary gap-2"
-          >
-            <Plus size={16} /> Ajouter un client
-          </button>}
+          {canWrite && (
+            <button
+              data-tour="client-create"
+              type="button"
+              disabled={busy || loading || loadError}
+              onClick={openCreateModal}
+              className="btn-primary gap-2"
+            >
+              <Plus size={16} /> Ajouter un client
+            </button>
+          )}
         </div>
       </section>
 
@@ -185,7 +227,19 @@ export default function ClientsPage() {
           </div>
         </div>
         {loadError ? (
-          <p role="alert" className="text-sm text-slate-600">Impossible de charger les clients. <button className="btn-secondary" onClick={() => loadData().catch(() => setLoadError(true))}>Réessayer</button></p>
+          <p role="alert" className="text-sm text-slate-600">
+            Impossible de charger les clients.{" "}
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={busy}
+              onClick={() =>
+                runAction(() => loadData().catch(() => setLoadError(true)))
+              }
+            >
+              Réessayer
+            </button>
+          </p>
         ) : loading ? (
           <p className="text-sm text-slate-500">Chargement des clients...</p>
         ) : (
@@ -233,24 +287,36 @@ export default function ClientsPage() {
                         <button
                           type="button"
                           className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50"
-                          onClick={() => openDetail(client.id)}
+                          disabled={busy}
+                          aria-label="Historique"
+                          onClick={() => runAction(() => openDetail(client.id))}
                           title="Historique"
                         >
                           <Eye size={14} />
                         </button>
-                        {canWrite && <button
-                          type="button"
-                          className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50"
-                          onClick={() => openEditModal(client)}
-                          title="Modifier"
-                        >
-                          <Pencil size={14} />
-                        </button>}
+                        {canWrite && (
+                          <button
+                            type="button"
+                            className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50"
+                            disabled={busy}
+                            aria-label="Modifier"
+                            onClick={() =>
+                              runAction(() => openEditModal(client))
+                            }
+                            title="Modifier"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                        )}
                         {isAdmin && (
                           <button
                             type="button"
                             className="rounded-lg border border-rose-200 p-2 text-rose-600 hover:bg-rose-50"
-                            onClick={() => handleDelete(client.id)}
+                            disabled={busy}
+                            aria-label="Supprimer"
+                            onClick={() =>
+                              runAction(() => handleDelete(client.id))
+                            }
                             title="Supprimer"
                           >
                             <Trash2 size={14} />
@@ -278,12 +344,26 @@ export default function ClientsPage() {
         isOpen={modalOpen}
         title={isEditing ? "Modifier le client" : "Ajouter un client"}
         onClose={closeModal}
+        closeDisabled={saving}
       >
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            runAction(() => handleSubmit(event));
+          }}
+          aria-busy={saving}
+          className="space-y-4"
+        >
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <label className="field-label">Nom</label>
+              <label className="field-label" htmlFor="client-name">
+                Nom
+              </label>
               <input
+                id="client-name"
+                minLength={2}
+                maxLength={150}
+                disabled={saving}
                 className="field-input"
                 value={form.name}
                 onChange={(event) =>
@@ -296,8 +376,13 @@ export default function ClientsPage() {
               />
             </div>
             <div>
-              <label className="field-label">Entreprise</label>
+              <label className="field-label" htmlFor="client-company">
+                Entreprise
+              </label>
               <input
+                id="client-company"
+                maxLength={180}
+                disabled={saving}
                 className="field-input"
                 value={form.company}
                 onChange={(event) =>
@@ -309,8 +394,13 @@ export default function ClientsPage() {
               />
             </div>
             <div>
-              <label className="field-label">Email</label>
+              <label className="field-label" htmlFor="client-email">
+                Email
+              </label>
               <input
+                id="client-email"
+                maxLength={180}
+                disabled={saving}
                 type="email"
                 className="field-input"
                 value={form.email}
@@ -324,8 +414,14 @@ export default function ClientsPage() {
               />
             </div>
             <div>
-              <label className="field-label">Téléphone</label>
+              <label className="field-label" htmlFor="client-phone">
+                Téléphone
+              </label>
               <input
+                id="client-phone"
+                type="tel"
+                maxLength={60}
+                disabled={saving}
                 className="field-input"
                 value={form.phone}
                 onChange={(event) =>
@@ -338,12 +434,19 @@ export default function ClientsPage() {
             </div>
           </div>
 
-          <ContactFields form={form} disabled={saving} onChange={(key, value) => setForm(prev => ({ ...prev, [key]: value }))} />
+          <ContactFields
+            form={form}
+            disabled={saving}
+            onChange={(key, value) =>
+              setForm((prev) => ({ ...prev, [key]: value }))
+            }
+          />
 
           <div className="flex justify-end gap-2">
             <button
               type="button"
               className="btn-secondary"
+              disabled={saving}
               onClick={closeModal}
             >
               Annuler

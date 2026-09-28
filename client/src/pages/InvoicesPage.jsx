@@ -5,8 +5,12 @@ import api from "../lib/api.js";
 import { formatCurrency, formatDate, toInputDate } from "../lib/format.js";
 import Modal from "../components/Modal.jsx";
 import StatusBadge from "../components/StatusBadge.jsx";
-import LineItemsEditor, { emptyLineItem } from "../components/LineItemsEditor.jsx";
+import LineItemsEditor, {
+  emptyLineItem,
+} from "../components/LineItemsEditor.jsx";
 import { useAuth } from "../hooks/useAuth.jsx";
+import useAsyncAction from "../hooks/useAsyncAction.js";
+import { apiErrorMessage, documentFormError } from "../lib/formErrors.js";
 
 const initialForm = {
   clientId: "",
@@ -14,12 +18,12 @@ const initialForm = {
   dueDate: "",
   paymentMethod: "bank_transfer",
   taxRate: 0.2,
-  items: [{ ...emptyLineItem }]
+  items: [{ ...emptyLineItem }],
 };
 
 const statusOptions = [
   { value: "pending", label: "En attente" },
-  { value: "paid", label: "Payée" }
+  { value: "paid", label: "Payée" },
 ];
 
 function normalizeInvoiceForForm(invoice) {
@@ -32,13 +36,16 @@ function normalizeInvoiceForForm(invoice) {
     items: invoice.items.map((item) => ({
       description: item.description,
       unitPrice: Number(item.unitPrice),
-      quantity: Number(item.quantity)
-    }))
+      quantity: Number(item.quantity),
+    })),
   };
 }
 
 export default function InvoicesPage() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, isCommercial, isFinance } = useAuth();
+  const canWrite = isAdmin || isCommercial || isFinance;
+  const { busy, runAction } = useAsyncAction();
+  const [loadError, setLoadError] = useState(false);
   const [invoices, setInvoices] = useState([]);
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -50,15 +57,22 @@ export default function InvoicesPage() {
   const isEditing = Boolean(activeInvoiceId);
 
   async function loadData() {
-    const [invoicesRes, clientsRes] = await Promise.all([api.get("/invoices"), api.get("/clients")]);
+    const [invoicesRes, clientsRes] = await Promise.all([
+      api.get("/invoices"),
+      api.get("/clients"),
+    ]);
     setInvoices(invoicesRes.data);
     setClients(clientsRes.data);
+    setLoadError(false);
   }
 
   useEffect(() => {
     let active = true;
     loadData()
-      .catch(() => toast.error("Impossible de charger les factures."))
+      .catch(() => {
+        setLoadError(true);
+        toast.error("Impossible de charger les factures.");
+      })
       .finally(() => {
         if (active) {
           setLoading(false);
@@ -70,12 +84,14 @@ export default function InvoicesPage() {
   }, []);
 
   function openCreateModal() {
+    if (!canWrite) return;
     setActiveInvoiceId(null);
     setForm(initialForm);
     setModalOpen(true);
   }
 
   async function openEditModal(invoiceId) {
+    if (!canWrite) return;
     try {
       const { data } = await api.get(`/invoices/${invoiceId}`);
       setActiveInvoiceId(invoiceId);
@@ -87,6 +103,7 @@ export default function InvoicesPage() {
   }
 
   function closeModal() {
+    if (saving) return;
     setModalOpen(false);
     setActiveInvoiceId(null);
     setForm(initialForm);
@@ -94,8 +111,10 @@ export default function InvoicesPage() {
 
   async function handleSubmit(event) {
     event.preventDefault();
-    if (!form.clientId) {
-      toast.error("Selectionne un client.");
+    if (saving || !canWrite) return;
+    const validationError = documentFormError(form);
+    if (validationError) {
+      toast.error(validationError);
       return;
     }
 
@@ -105,7 +124,7 @@ export default function InvoicesPage() {
       dueDate: form.dueDate || null,
       paymentMethod: form.paymentMethod || null,
       taxRate: Number(form.taxRate),
-      items: form.items
+      items: form.items,
     };
 
     setSaving(true);
@@ -115,12 +134,19 @@ export default function InvoicesPage() {
         toast.success("Facture mise à jour.");
       } else {
         await api.post("/invoices", payload);
-        toast.success("Facture creee.");
+        toast.success("Facture créée.");
       }
-      await loadData();
-      closeModal();
+      setModalOpen(false);
+      setActiveInvoiceId(null);
+      setForm(initialForm);
+      await loadData().catch(() => {
+        setLoadError(true);
+        toast.error(
+          "Facture enregistrée. Impossible d’actualiser la liste. Réessayez.",
+        );
+      });
     } catch (error) {
-      toast.error(error.response?.data?.message || "Action impossible.");
+      toast.error(apiErrorMessage(error));
     } finally {
       setSaving(false);
     }
@@ -137,7 +163,7 @@ export default function InvoicesPage() {
     try {
       await api.delete(`/invoices/${invoiceId}`);
       setInvoices((prev) => prev.filter((invoice) => invoice.id !== invoiceId));
-      toast.success("Facture supprimee.");
+      toast.success("Facture supprimée.");
     } catch (error) {
       toast.error(error.response?.data?.message || "Suppression impossible.");
     }
@@ -145,16 +171,18 @@ export default function InvoicesPage() {
 
   async function handleStatusChange(invoiceId, nextStatus) {
     try {
-      const { data } = await api.patch(`/invoices/${invoiceId}/status`, { status: nextStatus });
+      const { data } = await api.patch(`/invoices/${invoiceId}/status`, {
+        status: nextStatus,
+      });
       setInvoices((prev) =>
         prev.map((invoice) =>
           invoice.id === invoiceId
             ? {
                 ...invoice,
-                status: data.status
+                status: data.status,
               }
-            : invoice
-        )
+            : invoice,
+        ),
       );
       toast.success("Statut mis à jour.");
     } catch (error) {
@@ -165,7 +193,7 @@ export default function InvoicesPage() {
   async function handleDownloadPdf(invoice) {
     try {
       const response = await api.get(`/invoices/${invoice.id}/pdf`, {
-        responseType: "blob"
+        responseType: "blob",
       });
       const blob = new Blob([response.data], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
@@ -175,28 +203,38 @@ export default function InvoicesPage() {
       link.click();
       URL.revokeObjectURL(url);
     } catch (error) {
-      toast.error("Impossible de generer le PDF.");
+      toast.error("Impossible de générer le PDF.");
     }
   }
 
   async function handleStripeCheckout(invoiceId) {
     try {
-      const { data } = await api.post(`/payments/invoices/${invoiceId}/checkout-session`);
+      const { data } = await api.post(
+        `/payments/invoices/${invoiceId}/checkout-session`,
+      );
       if (data.checkoutUrl) {
-        window.open(data.checkoutUrl, "_blank", "noopener,noreferrer");
+        window.location.assign(data.checkoutUrl);
       }
     } catch (error) {
-      toast.error(error.response?.data?.message || "Paiement Stripe indisponible.");
+      toast.error(
+        error.response?.data?.message || "Paiement Stripe indisponible.",
+      );
     }
   }
 
   async function handleCopyPublicLink(invoiceId) {
     try {
-      const { data } = await api.get(`/payments/invoices/${invoiceId}/public-link`);
-      await navigator.clipboard.writeText(data.portalUrl || data.publicCheckoutEndpoint);
+      const { data } = await api.get(
+        `/payments/invoices/${invoiceId}/public-link`,
+      );
+      await navigator.clipboard.writeText(
+        data.portalUrl || data.publicCheckoutEndpoint,
+      );
       toast.success("Lien client copié.");
     } catch (error) {
-      toast.error(error.response?.data?.message || "Impossible de copier le lien.");
+      toast.error(
+        error.response?.data?.message || "Impossible de copier le lien.",
+      );
     }
   }
 
@@ -204,6 +242,7 @@ export default function InvoicesPage() {
     try {
       await api.post(`/invoices/${invoiceId}/send-email`);
       toast.success("Facture envoyée par email.");
+      await loadData().catch(() => setLoadError(true));
     } catch (error) {
       toast.error(error.response?.data?.message || "Envoi impossible.");
     }
@@ -214,19 +253,44 @@ export default function InvoicesPage() {
       <section className="card">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="font-heading text-xl font-semibold text-slate-900">Gestion des factures</h2>
+            <h2 className="font-heading text-xl font-semibold text-slate-900">
+              Gestion des factures
+            </h2>
             <p className="text-sm text-slate-500">
-              Numerotation auto, statut de paiement et encaissement Stripe.
+              Numérotation automatique, statut de paiement et encaissement
+              Stripe.
             </p>
           </div>
-          <button data-tour="invoice-create" type="button" onClick={openCreateModal} className="btn-primary">
-            Nouvelle facture
-          </button>
+          {canWrite && (
+            <button
+              data-tour="invoice-create"
+              type="button"
+              disabled={busy || loadError || loading}
+              onClick={openCreateModal}
+              className="btn-primary"
+            >
+              Nouvelle facture
+            </button>
+          )}
         </div>
       </section>
 
       <section className="card overflow-hidden">
-        {loading ? (
+        {loadError ? (
+          <p role="alert" className="text-sm text-slate-600">
+            Impossible de charger les factures.{" "}
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={busy}
+              onClick={() =>
+                runAction(() => loadData().catch(() => setLoadError(true)))
+              }
+            >
+              Réessayer
+            </button>
+          </p>
+        ) : loading ? (
           <p className="text-sm text-slate-500">Chargement des factures...</p>
         ) : (
           <div className="overflow-x-auto">
@@ -243,32 +307,48 @@ export default function InvoicesPage() {
               </thead>
               <tbody>
                 {invoices.map((invoice) => (
-                  <tr key={invoice.id} className="border-b border-slate-100 last:border-0">
-                    <td className="py-3 font-semibold text-slate-900">{invoice.invoiceNumber}</td>
+                  <tr
+                    key={invoice.id}
+                    className="border-b border-slate-100 last:border-0"
+                  >
+                    <td className="py-3 font-semibold text-slate-900">
+                      {invoice.invoiceNumber}
+                    </td>
                     <td className="py-3">
-                      <p className="font-medium text-slate-800">{invoice.client.name}</p>
+                      <p className="font-medium text-slate-800">
+                        {invoice.client.name}
+                      </p>
                       <p className="text-xs text-slate-500">
                         {invoice.client.company || "Sans entreprise"}
                       </p>
                     </td>
                     <td className="py-3 text-xs text-slate-600">
-                      <p>Emise: {formatDate(invoice.issueDate)}</p>
-                      <p>Echeance: {formatDate(invoice.dueDate)}</p>
+                      <p>Émise : {formatDate(invoice.issueDate)}</p>
+                      <p>Échéance : {formatDate(invoice.dueDate)}</p>
                     </td>
                     <td className="py-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <StatusBadge status={invoice.status} />
-                        <select
-                          className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600"
-                          value={invoice.status}
-                          onChange={(event) => handleStatusChange(invoice.id, event.target.value)}
-                        >
-                          {statusOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
+                        {canWrite && (
+                          <select
+                            className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600"
+                            value={invoice.status}
+                            aria-label={`Statut de facture ${invoice.invoiceNumber}`}
+                            disabled={busy}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              runAction(() =>
+                                handleStatusChange(invoice.id, value),
+                              );
+                            }}
+                          >
+                            {statusOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        )}
                       </div>
                     </td>
                     <td className="py-3 text-right font-semibold text-slate-900">
@@ -276,45 +356,75 @@ export default function InvoicesPage() {
                     </td>
                     <td className="py-3">
                       <div className="flex justify-end gap-1.5">
+                        {canWrite && (
+                          <button
+                            type="button"
+                            className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50"
+                            onClick={() =>
+                              runAction(() => openEditModal(invoice.id))
+                            }
+                            title="Modifier"
+                            aria-label="Modifier"
+                            disabled={busy}
+                          >
+                            <Pencil size={14} />
+                          </button>
+                        )}
                         <button
                           type="button"
                           className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50"
-                          onClick={() => openEditModal(invoice.id)}
-                          title="Modifier"
-                        >
-                          <Pencil size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50"
-                          onClick={() => handleDownloadPdf(invoice)}
+                          onClick={() =>
+                            runAction(() => handleDownloadPdf(invoice))
+                          }
                           title="PDF"
+                          aria-label="PDF"
+                          disabled={busy}
                         >
                           <FileDown size={14} />
                         </button>
-                        <button
-                          type="button"
-                          className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50"
-                          onClick={() => handleSendEmail(invoice.id)}
-                          title="Envoyer email"
-                        >
-                          <Send size={14} />
-                        </button>
+                        {canWrite && (
+                          <button
+                            type="button"
+                            className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50"
+                            onClick={() =>
+                              runAction(() => handleSendEmail(invoice.id))
+                            }
+                            title="Envoyer email"
+                            aria-label="Envoyer email"
+                            disabled={busy}
+                          >
+                            <Send size={14} />
+                          </button>
+                        )}
                         {invoice.status !== "paid" && (
                           <>
-                            <button
-                              type="button"
-                              className="rounded-lg border border-brand-200 p-2 text-brand-600 hover:bg-brand-50"
-                              onClick={() => handleStripeCheckout(invoice.id)}
-                              title="Payer via Stripe"
-                            >
-                              <CreditCard size={14} />
-                            </button>
+                            {canWrite && (
+                              <button
+                                type="button"
+                                className="rounded-lg border border-brand-200 p-2 text-brand-600 hover:bg-brand-50"
+                                onClick={() =>
+                                  runAction(() =>
+                                    handleStripeCheckout(invoice.id),
+                                  )
+                                }
+                                title="Payer via Stripe"
+                                aria-label="Payer via Stripe"
+                                disabled={busy}
+                              >
+                                <CreditCard size={14} />
+                              </button>
+                            )}
                             <button
                               type="button"
                               className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50"
-                              onClick={() => handleCopyPublicLink(invoice.id)}
+                              onClick={() =>
+                                runAction(() =>
+                                  handleCopyPublicLink(invoice.id),
+                                )
+                              }
                               title="Copier lien de paiement"
+                              aria-label="Copier lien de paiement"
+                              disabled={busy}
                             >
                               <Copy size={14} />
                             </button>
@@ -324,8 +434,12 @@ export default function InvoicesPage() {
                           <button
                             type="button"
                             className="rounded-lg border border-rose-200 p-2 text-rose-600 hover:bg-rose-50"
-                            onClick={() => handleDelete(invoice.id)}
+                            onClick={() =>
+                              runAction(() => handleDelete(invoice.id))
+                            }
                             title="Supprimer"
+                            aria-label="Supprimer"
+                            disabled={busy}
                           >
                             <Trash2 size={14} />
                           </button>
@@ -339,9 +453,9 @@ export default function InvoicesPage() {
           </div>
         )}
 
-        {!loading && invoices.length === 0 && (
+        {!loading && !loadError && invoices.length === 0 && (
           <div className="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
-            Aucune facture creee pour le moment.
+            Aucune facture créée pour le moment.
           </div>
         )}
       </section>
@@ -350,23 +464,35 @@ export default function InvoicesPage() {
         isOpen={modalOpen}
         title={isEditing ? "Modifier la facture" : "Créer une facture"}
         onClose={closeModal}
+        closeDisabled={saving}
       >
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            runAction(() => handleSubmit(event));
+          }}
+          aria-busy={saving}
+          className="space-y-4"
+        >
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <label className="field-label">Client</label>
+              <label className="field-label" htmlFor="invoice-clientId">
+                Client
+              </label>
               <select
+                id="invoice-clientId"
+                disabled={saving}
                 className="field-input"
                 value={form.clientId}
                 onChange={(event) =>
                   setForm((prev) => ({
                     ...prev,
-                    clientId: event.target.value
+                    clientId: event.target.value,
                   }))
                 }
                 required
               >
-                <option value="">Selectionner un client</option>
+                <option value="">Sélectionner un client</option>
                 {clients.map((client) => (
                   <option key={client.id} value={client.id}>
                     {client.name} {client.company ? `(${client.company})` : ""}
@@ -376,14 +502,18 @@ export default function InvoicesPage() {
             </div>
 
             <div>
-              <label className="field-label">Statut</label>
+              <label className="field-label" htmlFor="invoice-status">
+                Statut
+              </label>
               <select
+                id="invoice-status"
+                disabled={saving}
                 className="field-input"
                 value={form.status}
                 onChange={(event) =>
                   setForm((prev) => ({
                     ...prev,
-                    status: event.target.value
+                    status: event.target.value,
                   }))
                 }
               >
@@ -396,47 +526,59 @@ export default function InvoicesPage() {
             </div>
 
             <div>
-              <label className="field-label">Date limite</label>
+              <label className="field-label" htmlFor="invoice-dueDate">
+                Date limite
+              </label>
               <input
+                id="invoice-dueDate"
+                disabled={saving}
                 type="date"
                 className="field-input"
                 value={form.dueDate}
                 onChange={(event) =>
                   setForm((prev) => ({
                     ...prev,
-                    dueDate: event.target.value
+                    dueDate: event.target.value,
                   }))
                 }
               />
             </div>
 
             <div>
-              <label className="field-label">Mode de paiement</label>
+              <label className="field-label" htmlFor="invoice-paymentMethod">
+                Mode de paiement
+              </label>
               <input
+                id="invoice-paymentMethod"
+                disabled={saving}
                 className="field-input"
                 value={form.paymentMethod}
                 onChange={(event) =>
                   setForm((prev) => ({
                     ...prev,
-                    paymentMethod: event.target.value
+                    paymentMethod: event.target.value,
                   }))
                 }
               />
             </div>
 
             <div className="sm:col-span-2">
-              <label className="field-label">TVA (0 - 1)</label>
+              <label className="field-label" htmlFor="invoice-taxRate">
+                Taux de taxe (%)
+              </label>
               <input
+                id="invoice-taxRate"
+                disabled={saving}
                 type="number"
                 min="0"
-                max="1"
-                step="0.01"
+                max="100"
+                step="0.001"
                 className="field-input"
-                value={form.taxRate}
+                value={Number((Number(form.taxRate) * 100).toFixed(6))}
                 onChange={(event) =>
                   setForm((prev) => ({
                     ...prev,
-                    taxRate: Number(event.target.value || 0)
+                    taxRate: Number(event.target.value || 0) / 100,
                   }))
                 }
               />
@@ -446,23 +588,33 @@ export default function InvoicesPage() {
           <div>
             <label className="field-label">Services</label>
             <LineItemsEditor
+              disabled={saving}
               items={form.items}
               taxRate={form.taxRate}
               onChange={(items) =>
                 setForm((prev) => ({
                   ...prev,
-                  items
+                  items,
                 }))
               }
             />
           </div>
 
           <div className="flex justify-end gap-2">
-            <button type="button" className="btn-secondary" onClick={closeModal}>
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={saving}
+              onClick={closeModal}
+            >
               Annuler
             </button>
             <button type="submit" className="btn-primary" disabled={saving}>
-              {saving ? "Enregistrement..." : isEditing ? "Mettre à jour" : "Créer la facture"}
+              {saving
+                ? "Enregistrement..."
+                : isEditing
+                  ? "Mettre à jour"
+                  : "Créer la facture"}
             </button>
           </div>
         </form>

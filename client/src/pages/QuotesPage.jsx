@@ -7,9 +7,11 @@ import Modal from "../components/Modal.jsx";
 import StatusBadge from "../components/StatusBadge.jsx";
 import LineItemsEditor, {
   emptyLineItem,
-  computeDraftTotals
+  computeDraftTotals,
 } from "../components/LineItemsEditor.jsx";
 import { useAuth } from "../hooks/useAuth.jsx";
+import useAsyncAction from "../hooks/useAsyncAction.js";
+import { apiErrorMessage, documentFormError } from "../lib/formErrors.js";
 
 const initialForm = {
   clientId: "",
@@ -17,14 +19,14 @@ const initialForm = {
   validUntil: "",
   taxRate: 0.2,
   notes: "",
-  items: [{ ...emptyLineItem }]
+  items: [{ ...emptyLineItem }],
 };
 
 const statusOptions = [
   { value: "draft", label: "Brouillon" },
   { value: "sent", label: "Envoyé" },
   { value: "accepted", label: "Accepté" },
-  { value: "refused", label: "Refusé" }
+  { value: "refused", label: "Refusé" },
 ];
 
 function normalizeQuoteForForm(quote) {
@@ -37,13 +39,16 @@ function normalizeQuoteForForm(quote) {
     items: quote.items.map((item) => ({
       description: item.description,
       unitPrice: Number(item.unitPrice),
-      quantity: Number(item.quantity)
-    }))
+      quantity: Number(item.quantity),
+    })),
   };
 }
 
 export default function QuotesPage() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, isCommercial } = useAuth();
+  const canWrite = isAdmin || isCommercial;
+  const { busy, runAction } = useAsyncAction();
+  const [loadError, setLoadError] = useState(false);
   const [quotes, setQuotes] = useState([]);
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -55,15 +60,22 @@ export default function QuotesPage() {
   const isEditing = Boolean(activeQuoteId);
 
   async function loadData() {
-    const [quotesRes, clientsRes] = await Promise.all([api.get("/quotes"), api.get("/clients")]);
+    const [quotesRes, clientsRes] = await Promise.all([
+      api.get("/quotes"),
+      api.get("/clients"),
+    ]);
     setQuotes(quotesRes.data);
     setClients(clientsRes.data);
+    setLoadError(false);
   }
 
   useEffect(() => {
     let active = true;
     loadData()
-      .catch(() => toast.error("Impossible de charger les devis."))
+      .catch(() => {
+        setLoadError(true);
+        toast.error("Impossible de charger les devis.");
+      })
       .finally(() => {
         if (active) {
           setLoading(false);
@@ -74,15 +86,20 @@ export default function QuotesPage() {
     };
   }, []);
 
-  const totals = useMemo(() => computeDraftTotals(form.items, form.taxRate), [form]);
+  const totals = useMemo(
+    () => computeDraftTotals(form.items, form.taxRate),
+    [form],
+  );
 
   function openCreateModal() {
+    if (!canWrite) return;
     setActiveQuoteId(null);
     setForm(initialForm);
     setModalOpen(true);
   }
 
   async function openEditModal(quoteId) {
+    if (!canWrite) return;
     try {
       const { data } = await api.get(`/quotes/${quoteId}`);
       setActiveQuoteId(quoteId);
@@ -94,6 +111,7 @@ export default function QuotesPage() {
   }
 
   function closeModal() {
+    if (saving) return;
     setModalOpen(false);
     setActiveQuoteId(null);
     setForm(initialForm);
@@ -101,13 +119,10 @@ export default function QuotesPage() {
 
   async function handleSubmit(event) {
     event.preventDefault();
-    if (!form.clientId) {
-      toast.error("Sélectionne un client.");
-      return;
-    }
-
-    if (!form.items.some((item) => item.description.trim().length > 0)) {
-      toast.error("Ajoute au moins un service.");
+    if (saving || !canWrite) return;
+    const validationError = documentFormError(form);
+    if (validationError) {
+      toast.error(validationError);
       return;
     }
 
@@ -117,7 +132,7 @@ export default function QuotesPage() {
       validUntil: form.validUntil || null,
       taxRate: Number(form.taxRate),
       notes: form.notes || null,
-      items: form.items
+      items: form.items,
     };
 
     setSaving(true);
@@ -129,10 +144,17 @@ export default function QuotesPage() {
         await api.post("/quotes", payload);
         toast.success("Devis créé.");
       }
-      await loadData();
-      closeModal();
+      setModalOpen(false);
+      setActiveQuoteId(null);
+      setForm(initialForm);
+      await loadData().catch(() => {
+        setLoadError(true);
+        toast.error(
+          "Devis enregistré. Impossible d’actualiser la liste. Réessayez.",
+        );
+      });
     } catch (error) {
-      toast.error(error.response?.data?.message || "Action impossible.");
+      toast.error(apiErrorMessage(error));
     } finally {
       setSaving(false);
     }
@@ -157,16 +179,18 @@ export default function QuotesPage() {
 
   async function handleStatusChange(quoteId, nextStatus) {
     try {
-      const { data } = await api.patch(`/quotes/${quoteId}/status`, { status: nextStatus });
+      const { data } = await api.patch(`/quotes/${quoteId}/status`, {
+        status: nextStatus,
+      });
       setQuotes((prev) =>
         prev.map((quote) =>
           quote.id === quoteId
             ? {
                 ...quote,
-                status: data.status
+                status: data.status,
               }
-            : quote
-        )
+            : quote,
+        ),
       );
       toast.success("Statut mis à jour.");
     } catch (error) {
@@ -188,6 +212,7 @@ export default function QuotesPage() {
     try {
       await api.post(`/quotes/${quoteId}/send-email`);
       toast.success("Devis envoyé par email.");
+      await loadData().catch(() => setLoadError(true));
     } catch (error) {
       toast.error(error.response?.data?.message || "Envoi impossible.");
     }
@@ -199,14 +224,16 @@ export default function QuotesPage() {
       await navigator.clipboard.writeText(data.portalUrl);
       toast.success("Lien client copié.");
     } catch (error) {
-      toast.error(error.response?.data?.message || "Impossible de copier le lien.");
+      toast.error(
+        error.response?.data?.message || "Impossible de copier le lien.",
+      );
     }
   }
 
   async function handleDownloadPdf(quote) {
     try {
       const response = await api.get(`/quotes/${quote.id}/pdf`, {
-        responseType: "blob"
+        responseType: "blob",
       });
       const blob = new Blob([response.data], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
@@ -225,17 +252,43 @@ export default function QuotesPage() {
       <section className="card">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="font-heading text-xl font-semibold text-slate-900">Gestion des devis</h2>
-            <p className="text-sm text-slate-500">Crée, envoie et convertis tes devis en factures.</p>
+            <h2 className="font-heading text-xl font-semibold text-slate-900">
+              Gestion des devis
+            </h2>
+            <p className="text-sm text-slate-500">
+              Crée, envoie et convertis tes devis en factures.
+            </p>
           </div>
-          <button data-tour="quote-create" type="button" onClick={openCreateModal} className="btn-primary">
-            Nouveau devis
-          </button>
+          {canWrite && (
+            <button
+              data-tour="quote-create"
+              type="button"
+              disabled={busy || loadError || loading}
+              onClick={openCreateModal}
+              className="btn-primary"
+            >
+              Nouveau devis
+            </button>
+          )}
         </div>
       </section>
 
       <section className="card overflow-hidden">
-        {loading ? (
+        {loadError ? (
+          <p role="alert" className="text-sm text-slate-600">
+            Impossible de charger les devis.{" "}
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={busy}
+              onClick={() =>
+                runAction(() => loadData().catch(() => setLoadError(true)))
+              }
+            >
+              Réessayer
+            </button>
+          </p>
+        ) : loading ? (
           <p className="text-sm text-slate-500">Chargement des devis...</p>
         ) : (
           <div className="overflow-x-auto">
@@ -252,27 +305,47 @@ export default function QuotesPage() {
               </thead>
               <tbody>
                 {quotes.map((quote) => (
-                  <tr key={quote.id} className="border-b border-slate-100 last:border-0">
-                    <td className="py-3 font-semibold text-slate-900">{quote.quoteNumber}</td>
-                    <td className="py-3">
-                      <p className="font-medium text-slate-800">{quote.client.name}</p>
-                      <p className="text-xs text-slate-500">{quote.client.company || "Sans entreprise"}</p>
+                  <tr
+                    key={quote.id}
+                    className="border-b border-slate-100 last:border-0"
+                  >
+                    <td className="py-3 font-semibold text-slate-900">
+                      {quote.quoteNumber}
                     </td>
-                    <td className="py-3 text-slate-600">{formatDate(quote.issueDate)}</td>
+                    <td className="py-3">
+                      <p className="font-medium text-slate-800">
+                        {quote.client.name}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {quote.client.company || "Sans entreprise"}
+                      </p>
+                    </td>
+                    <td className="py-3 text-slate-600">
+                      {formatDate(quote.issueDate)}
+                    </td>
                     <td className="py-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <StatusBadge status={quote.status} />
-                        <select
-                          className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600"
-                          value={quote.status}
-                          onChange={(event) => handleStatusChange(quote.id, event.target.value)}
-                        >
-                          {statusOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
+                        {canWrite && (
+                          <select
+                            className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600"
+                            value={quote.status}
+                            aria-label={`Statut de devis ${quote.quoteNumber}`}
+                            disabled={busy}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              runAction(() =>
+                                handleStatusChange(quote.id, value),
+                              );
+                            }}
+                          >
+                            {statusOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        )}
                       </div>
                     </td>
                     <td className="py-3 text-right font-semibold text-slate-900">
@@ -280,52 +353,82 @@ export default function QuotesPage() {
                     </td>
                     <td className="py-3">
                       <div className="flex justify-end gap-1.5">
+                        {canWrite && (
+                          <button
+                            type="button"
+                            className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50"
+                            onClick={() =>
+                              runAction(() => openEditModal(quote.id))
+                            }
+                            title="Modifier"
+                            aria-label="Modifier"
+                            disabled={busy}
+                          >
+                            <Pencil size={14} />
+                          </button>
+                        )}
                         <button
                           type="button"
                           className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50"
-                          onClick={() => openEditModal(quote.id)}
-                          title="Modifier"
-                        >
-                          <Pencil size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50"
-                          onClick={() => handleDownloadPdf(quote)}
+                          onClick={() =>
+                            runAction(() => handleDownloadPdf(quote))
+                          }
                           title="PDF"
+                          aria-label="PDF"
+                          disabled={busy}
                         >
                           <FileDown size={14} />
                         </button>
+                        {canWrite && (
+                          <button
+                            type="button"
+                            className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50"
+                            onClick={() =>
+                              runAction(() => handleSendEmail(quote.id))
+                            }
+                            title="Envoyer email"
+                            aria-label="Envoyer email"
+                            disabled={busy}
+                          >
+                            <Send size={14} />
+                          </button>
+                        )}
                         <button
                           type="button"
                           className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50"
-                          onClick={() => handleSendEmail(quote.id)}
-                          title="Envoyer email"
-                        >
-                          <Send size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50"
-                          onClick={() => handleCopyPublicLink(quote.id)}
+                          onClick={() =>
+                            runAction(() => handleCopyPublicLink(quote.id))
+                          }
                           title="Copier lien client"
+                          aria-label="Copier lien client"
+                          disabled={busy}
                         >
                           <Copy size={14} />
                         </button>
-                        <button
-                          type="button"
-                          className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50"
-                          onClick={() => handleConvertToInvoice(quote.id)}
-                          title="Convertir en facture"
-                        >
-                          <RefreshCcw size={14} />
-                        </button>
+                        {canWrite && (
+                          <button
+                            type="button"
+                            className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50"
+                            onClick={() =>
+                              runAction(() => handleConvertToInvoice(quote.id))
+                            }
+                            title="Convertir en facture"
+                            aria-label="Convertir en facture"
+                            disabled={busy}
+                          >
+                            <RefreshCcw size={14} />
+                          </button>
+                        )}
                         {isAdmin && (
                           <button
                             type="button"
                             className="rounded-lg border border-rose-200 p-2 text-rose-600 hover:bg-rose-50"
-                            onClick={() => handleDelete(quote.id)}
+                            onClick={() =>
+                              runAction(() => handleDelete(quote.id))
+                            }
                             title="Supprimer"
+                            aria-label="Supprimer"
+                            disabled={busy}
                           >
                             <Trash2 size={14} />
                           </button>
@@ -339,7 +442,7 @@ export default function QuotesPage() {
           </div>
         )}
 
-        {!loading && quotes.length === 0 && (
+        {!loading && !loadError && quotes.length === 0 && (
           <div className="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
             Aucun devis créé pour le moment.
           </div>
@@ -350,18 +453,30 @@ export default function QuotesPage() {
         isOpen={modalOpen}
         title={isEditing ? "Modifier le devis" : "Créer un devis"}
         onClose={closeModal}
+        closeDisabled={saving}
       >
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            runAction(() => handleSubmit(event));
+          }}
+          aria-busy={saving}
+          className="space-y-4"
+        >
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <label className="field-label">Client</label>
+              <label className="field-label" htmlFor="quote-clientId">
+                Client
+              </label>
               <select
+                id="quote-clientId"
+                disabled={saving}
                 className="field-input"
                 value={form.clientId}
                 onChange={(event) =>
                   setForm((prev) => ({
                     ...prev,
-                    clientId: event.target.value
+                    clientId: event.target.value,
                   }))
                 }
                 required
@@ -376,14 +491,18 @@ export default function QuotesPage() {
             </div>
 
             <div>
-              <label className="field-label">Statut</label>
+              <label className="field-label" htmlFor="quote-status">
+                Statut
+              </label>
               <select
+                id="quote-status"
+                disabled={saving}
                 className="field-input"
                 value={form.status}
                 onChange={(event) =>
                   setForm((prev) => ({
                     ...prev,
-                    status: event.target.value
+                    status: event.target.value,
                   }))
                 }
               >
@@ -396,33 +515,41 @@ export default function QuotesPage() {
             </div>
 
             <div>
-              <label className="field-label">Date limite</label>
+              <label className="field-label" htmlFor="quote-validUntil">
+                Date limite
+              </label>
               <input
+                id="quote-validUntil"
+                disabled={saving}
                 type="date"
                 className="field-input"
                 value={form.validUntil}
                 onChange={(event) =>
                   setForm((prev) => ({
                     ...prev,
-                    validUntil: event.target.value
+                    validUntil: event.target.value,
                   }))
                 }
               />
             </div>
 
             <div>
-              <label className="field-label">TVA (0 - 1)</label>
+              <label className="field-label" htmlFor="quote-taxRate">
+                Taux de taxe (%)
+              </label>
               <input
+                id="quote-taxRate"
+                disabled={saving}
                 type="number"
                 min="0"
-                max="1"
-                step="0.01"
+                max="100"
+                step="0.001"
                 className="field-input"
-                value={form.taxRate}
+                value={Number((Number(form.taxRate) * 100).toFixed(6))}
                 onChange={(event) =>
                   setForm((prev) => ({
                     ...prev,
-                    taxRate: Number(event.target.value || 0)
+                    taxRate: Number(event.target.value || 0) / 100,
                   }))
                 }
               />
@@ -432,27 +559,32 @@ export default function QuotesPage() {
           <div>
             <label className="field-label">Services</label>
             <LineItemsEditor
+              disabled={saving}
               items={form.items}
               taxRate={form.taxRate}
               onChange={(items) =>
                 setForm((prev) => ({
                   ...prev,
-                  items
+                  items,
                 }))
               }
             />
           </div>
 
           <div>
-            <label className="field-label">Notes</label>
+            <label className="field-label" htmlFor="quote-notes">
+              Notes
+            </label>
             <textarea
+              id="quote-notes"
+              disabled={saving}
               rows={3}
               className="field-textarea"
               value={form.notes}
               onChange={(event) =>
                 setForm((prev) => ({
                   ...prev,
-                  notes: event.target.value
+                  notes: event.target.value,
                 }))
               }
             />
@@ -466,11 +598,20 @@ export default function QuotesPage() {
           </div>
 
           <div className="flex justify-end gap-2">
-            <button type="button" className="btn-secondary" onClick={closeModal}>
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={saving}
+              onClick={closeModal}
+            >
               Annuler
             </button>
             <button type="submit" className="btn-primary" disabled={saving}>
-              {saving ? "Enregistrement..." : isEditing ? "Mettre à jour" : "Créer le devis"}
+              {saving
+                ? "Enregistrement..."
+                : isEditing
+                  ? "Mettre à jour"
+                  : "Créer le devis"}
             </button>
           </div>
         </form>

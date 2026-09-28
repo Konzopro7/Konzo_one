@@ -1,33 +1,30 @@
 import { Plus, Trash2 } from "lucide-react";
 import { formatCurrency } from "../lib/format.js";
+import { computeTotals } from "../../../shared/documentTotals.mjs";
 
 export const emptyLineItem = {
   description: "",
   unitPrice: 0,
-  quantity: 1
+  quantity: 1,
 };
 
 export function computeDraftTotals(items, taxRate = 0.2) {
-  const subtotal = items.reduce(
-    (sum, item) => sum + Number(item.unitPrice || 0) * Number(item.quantity || 0),
-    0
-  );
-  const taxAmount = subtotal * Number(taxRate || 0);
-  return {
-    subtotal,
-    taxAmount,
-    total: subtotal + taxAmount
-  };
+  return computeTotals(items, taxRate);
 }
 
-export default function LineItemsEditor({ items, onChange, taxRate = 0.2 }) {
+export default function LineItemsEditor({
+  items,
+  onChange,
+  taxRate = 0.2,
+  disabled = false,
+}) {
   const totals = computeDraftTotals(items, taxRate);
 
   function updateItem(index, field, value) {
     const next = [...items];
     next[index] = {
       ...next[index],
-      [field]: value
+      [field]: value,
     };
     onChange(next);
   }
@@ -58,38 +55,62 @@ export default function LineItemsEditor({ items, onChange, taxRate = 0.2 }) {
           </thead>
           <tbody>
             {items.map((item, index) => {
-              const lineTotal = Number(item.unitPrice || 0) * Number(item.quantity || 0);
+              const lineTotal =
+                Number(item.unitPrice || 0) * Number(item.quantity || 0);
               return (
-                <tr key={`line-item-${index}`} className="border-t border-slate-200">
+                <tr
+                  key={`line-item-${index}`}
+                  className="border-t border-slate-200"
+                >
                   <td className="px-3 py-2">
                     <input
+                      aria-label={`Description du service ${index + 1}`}
+                      disabled={disabled}
+                      required
+                      maxLength={10000}
                       className="field-input"
                       placeholder="Ex: Conception site vitrine"
                       value={item.description}
-                      onChange={(event) => updateItem(index, "description", event.target.value)}
+                      onChange={(event) =>
+                        updateItem(index, "description", event.target.value)
+                      }
                     />
                   </td>
                   <td className="px-3 py-2">
                     <input
+                      aria-label={`Prix unitaire du service ${index + 1}`}
+                      disabled={disabled}
+                      required
                       type="number"
                       min="0"
                       step="0.01"
                       className="field-input"
                       value={item.unitPrice}
                       onChange={(event) =>
-                        updateItem(index, "unitPrice", Number(event.target.value || 0))
+                        updateItem(
+                          index,
+                          "unitPrice",
+                          Number(event.target.value || 0),
+                        )
                       }
                     />
                   </td>
                   <td className="px-3 py-2">
                     <input
+                      aria-label={`Quantité du service ${index + 1}`}
+                      disabled={disabled}
+                      required
                       type="number"
-                      min="1"
-                      step="1"
+                      min="0.01"
+                      step="0.01"
                       className="field-input"
                       value={item.quantity}
                       onChange={(event) =>
-                        updateItem(index, "quantity", Number(event.target.value || 1))
+                        updateItem(
+                          index,
+                          "quantity",
+                          Number(event.target.value || 0),
+                        )
                       }
                     />
                   </td>
@@ -98,6 +119,8 @@ export default function LineItemsEditor({ items, onChange, taxRate = 0.2 }) {
                   </td>
                   <td className="px-3 py-2 text-right">
                     <button
+                      aria-label={`Supprimer le service ${index + 1}`}
+                      disabled={disabled || items.length === 1}
                       type="button"
                       onClick={() => removeItem(index)}
                       className="rounded-lg border border-slate-200 p-2 text-slate-500 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
@@ -113,15 +136,35 @@ export default function LineItemsEditor({ items, onChange, taxRate = 0.2 }) {
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <button type="button" onClick={addItem} className="btn-secondary gap-2">
+        <button
+          type="button"
+          onClick={addItem}
+          disabled={disabled || items.length >= 200}
+          className="btn-secondary gap-2"
+        >
           <Plus size={16} />
           Ajouter une ligne
         </button>
 
         <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm">
-          <p className="text-slate-600">Sous-total: <span className="font-semibold text-slate-900">{formatCurrency(totals.subtotal)}</span></p>
-          <p className="text-slate-600">TVA: <span className="font-semibold text-slate-900">{formatCurrency(totals.taxAmount)}</span></p>
-          <p className="text-slate-700">Total: <span className="font-heading text-lg font-semibold text-brand-500">{formatCurrency(totals.total)}</span></p>
+          <p className="text-slate-600">
+            Sous-total:{" "}
+            <span className="font-semibold text-slate-900">
+              {formatCurrency(totals.subtotal)}
+            </span>
+          </p>
+          <p className="text-slate-600">
+            Taxes:{" "}
+            <span className="font-semibold text-slate-900">
+              {formatCurrency(totals.taxAmount)}
+            </span>
+          </p>
+          <p className="text-slate-700">
+            Total:{" "}
+            <span className="font-heading text-lg font-semibold text-brand-500">
+              {formatCurrency(totals.total)}
+            </span>
+          </p>
         </div>
       </div>
     </div>

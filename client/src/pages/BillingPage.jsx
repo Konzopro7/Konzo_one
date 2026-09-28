@@ -12,17 +12,22 @@ export default function BillingPage() {
   const [loading, setLoading] = useState(true);
   const [processingPlan, setProcessingPlan] = useState("");
   const [status, setStatus] = useState(null);
+  const [loadError, setLoadError] = useState(false);
   const confirmingSessionRef = useRef("");
 
   async function loadStatus() {
     const { data } = await api.get("/billing/status");
     setStatus(data);
+    setLoadError(false);
   }
 
   useEffect(() => {
     let active = true;
     loadStatus()
-      .catch(() => toast.error("Impossible de charger l'abonnement."))
+      .catch(() => {
+        setLoadError(true);
+        toast.error("Impossible de charger l'abonnement.");
+      })
       .finally(() => {
         if (active) {
           setLoading(false);
@@ -56,25 +61,35 @@ export default function BillingPage() {
     api
       .post("/billing/confirm-checkout", { sessionId })
       .then(async ({ data }) => {
-        if (data.subscription?.subscriptionStatus === "active") toast.success("Paiement confirmé. Ton abonnement est actif.");
-        else toast.error("L’abonnement reste inactif. Vérifiez son statut de paiement.");
+        if (data.subscription?.subscriptionStatus === "active")
+          toast.success("Paiement confirmé. Ton abonnement est actif.");
+        else
+          toast.error(
+            "L’abonnement reste inactif. Vérifiez son statut de paiement.",
+          );
         await loadStatus();
         await refreshUser?.();
       })
       .catch((error) => {
         confirmingSessionRef.current = "";
-        toast.error(error.response?.data?.message || "Confirmation du paiement impossible.");
+        toast.error(
+          error.response?.data?.message ||
+            "Confirmation du paiement impossible.",
+        );
       })
       .finally(() => setSearchParams({}, { replace: true }));
   }, [searchParams, setSearchParams]);
 
-  const currentPlan = status?.subscription?.planTier || user?.subscription?.planTier || "pro";
+  const currentPlan =
+    status?.subscription?.planTier || user?.subscription?.planTier || "pro";
   const subscriptionStatus =
     status?.subscription?.subscriptionStatus ||
     user?.subscription?.subscriptionStatus ||
     "trial";
   const trialDaysLeft =
-    status?.subscription?.trialDaysLeft ?? user?.subscription?.trialDaysLeft ?? 0;
+    status?.subscription?.trialDaysLeft ??
+    user?.subscription?.trialDaysLeft ??
+    0;
   const needsRenewal = ["canceled", "past_due"].includes(subscriptionStatus);
 
   function planActionLabel(planTier, label) {
@@ -111,13 +126,18 @@ export default function BillingPage() {
       toast.error("Seuls les admins peuvent gérer l'abonnement.");
       return;
     }
-    if (status?.subscription?.stripeSubscriptionId && ['active','trial'].includes(subscriptionStatus)) {
+    if (
+      status?.subscription?.stripeSubscriptionId &&
+      ["active", "trial"].includes(subscriptionStatus)
+    ) {
       return openBillingPortal();
     }
 
     setProcessingPlan(planTier);
     try {
-      const { data } = await api.post("/billing/checkout-session", { planTier });
+      const { data } = await api.post("/billing/checkout-session", {
+        planTier,
+      });
 
       if (data.checkoutUrl) {
         window.location.assign(data.checkoutUrl);
@@ -126,12 +146,15 @@ export default function BillingPage() {
         toast.success(
           needsRenewal
             ? "Abonnement renouvelé en mode local."
-            : "Abonnement activé en mode local."
+            : "Abonnement activé en mode local.",
         );
         await loadStatus();
+        await refreshUser?.();
       }
     } catch (error) {
-      toast.error(error.response?.data?.message || "Activation de plan impossible.");
+      toast.error(
+        error.response?.data?.message || "Activation de plan impossible.",
+      );
     } finally {
       setProcessingPlan("");
     }
@@ -145,46 +168,103 @@ export default function BillingPage() {
       await api.post("/billing/simulate-cancel");
       toast.success("Abonnement annulé (simulation locale).");
       await loadStatus();
+      await refreshUser?.();
     } catch (error) {
       toast.error(error.response?.data?.message || "Action impossible.");
     }
   }
 
-  async function openBillingPortal(action = 'manage') {
+  async function openBillingPortal(action = "manage") {
     if (!isAdmin || processingPlan) return;
-    setProcessingPlan(action === 'cancel' ? 'cancel' : 'portal');
+    setProcessingPlan(action === "cancel" ? "cancel" : "portal");
     try {
-      const { data } = await api.post('/billing/portal-session', { action });
+      const { data } = await api.post("/billing/portal-session", { action });
       window.location.assign(data.portalUrl);
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Le portail de facturation est indisponible.');
-    } finally { setProcessingPlan(''); }
+      toast.error(
+        error.response?.data?.message ||
+          "Le portail de facturation est indisponible.",
+      );
+    } finally {
+      setProcessingPlan("");
+    }
   }
 
   if (loading) {
     return (
       <section className="card">
-        <p className="text-sm text-slate-500">Chargement de la facturation...</p>
+        <p className="text-sm text-slate-500">
+          Chargement de la facturation...
+        </p>
       </section>
     );
   }
 
+  if (loadError)
+    return (
+      <section className="card">
+        <p role="alert" className="text-sm text-slate-600">
+          Impossible de charger votre abonnement. Aucun changement n’a été
+          effectué.
+        </p>
+        <button
+          type="button"
+          className="btn-secondary mt-3"
+          onClick={() => {
+            setLoading(true);
+            loadStatus()
+              .catch(() => setLoadError(true))
+              .finally(() => setLoading(false));
+          }}
+        >
+          Réessayer
+        </button>
+      </section>
+    );
+
   return (
     <div className="space-y-5">
-      {status?.stripeTestMode && <section className="card"><p role="status" className="text-sm text-amber-700">Stripe est en mode test. Les paiements sont simulés et aucun montant réel n’est encaissé.</p></section>}
+      {status?.stripeTestMode && (
+        <section className="card">
+          <p role="status" className="text-sm text-amber-700">
+            Stripe est en mode test. Les paiements sont simulés et aucun montant
+            réel n’est encaissé.
+          </p>
+        </section>
+      )}
       {isAdmin && status?.subscription?.stripeCustomerId && (
         <section className="card">
           <div className="flex flex-wrap gap-3">
-            <button type="button" className="btn-secondary" disabled={Boolean(processingPlan)} onClick={() => openBillingPortal()}>Gérer ma facturation Stripe</button>
-            {status.subscription.stripeSubscriptionId && subscriptionStatus !== 'canceled' && (
-              <button type="button" className="btn-secondary" disabled={Boolean(processingPlan)} onClick={() => openBillingPortal('cancel')}>
-                {processingPlan === 'cancel' ? 'Redirection...' : 'Annuler mon abonnement'}
-              </button>
-            )}
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={Boolean(processingPlan)}
+              onClick={() => openBillingPortal()}
+            >
+              Gérer ma facturation Stripe
+            </button>
+            {status.subscription.stripeSubscriptionId &&
+              subscriptionStatus !== "canceled" && (
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  disabled={Boolean(processingPlan)}
+                  onClick={() => openBillingPortal("cancel")}
+                >
+                  {processingPlan === "cancel"
+                    ? "Redirection..."
+                    : "Annuler mon abonnement"}
+                </button>
+              )}
           </div>
-          {status.subscription.stripeSubscriptionId && subscriptionStatus !== 'canceled' && (
-            <p className="mt-3 text-sm text-slate-500">L’annulation se confirme sur Stripe. Le renouvellement automatique sera arrêté et votre accès sera conservé jusqu’à la fin de la période en cours. Vos données restent conservées.</p>
-          )}
+          {status.subscription.stripeSubscriptionId &&
+            subscriptionStatus !== "canceled" && (
+              <p className="mt-3 text-sm text-slate-500">
+                L’annulation se confirme sur Stripe. Le renouvellement
+                automatique sera arrêté et votre accès sera conservé jusqu’à la
+                fin de la période en cours. Vos données restent conservées.
+              </p>
+            )}
         </section>
       )}
       <section className="card">
@@ -194,7 +274,8 @@ export default function BillingPage() {
               Abonnement SaaS
             </h2>
             <p className="mt-1 text-sm text-slate-500">
-              Gère tes plans Pro/Premium, ton essai gratuit 30 jours et la facturation mensuelle.
+              Gère tes plans Pro/Premium, ton essai gratuit 30 jours et la
+              facturation mensuelle.
             </p>
           </div>
           <span
@@ -204,7 +285,7 @@ export default function BillingPage() {
                 ? "bg-emerald-100 text-emerald-700"
                 : subscriptionStatus === "trial"
                   ? "bg-brand-100 text-brand-700"
-                  : "bg-amber-100 text-amber-700"
+                  : "bg-amber-100 text-amber-700",
             ].join(" ")}
           >
             {statusLabel}
@@ -236,7 +317,8 @@ export default function BillingPage() {
       {status?.simulated && (
         <section className="card rounded-2xl border border-amber-200 bg-amber-50">
           <p className="text-sm text-amber-800">
-            Mode local : les plans sans identifiant de prix Stripe sont activés ou renouvelés en simulation.
+            Mode local : les plans sans identifiant de prix Stripe sont activés
+            ou renouvelés en simulation.
           </p>
         </section>
       )}
@@ -244,7 +326,9 @@ export default function BillingPage() {
       <section className="grid gap-4 lg:grid-cols-2">
         <article className="card border border-brand-200">
           <div className="flex items-center justify-between">
-            <h3 className="font-heading text-xl font-semibold text-slate-900">Plan Pro</h3>
+            <h3 className="font-heading text-xl font-semibold text-slate-900">
+              Plan Pro
+            </h3>
             <Crown size={18} className="text-brand-600" />
           </div>
           <p className="mt-2 text-3xl font-semibold text-slate-900">
@@ -280,7 +364,9 @@ export default function BillingPage() {
 
         <article className="card border border-brand-500 bg-gradient-to-b from-brand-50 to-white">
           <div className="flex items-center justify-between">
-            <h3 className="font-heading text-xl font-semibold text-slate-900">Plan Premium</h3>
+            <h3 className="font-heading text-xl font-semibold text-slate-900">
+              Plan Premium
+            </h3>
             <Gem size={18} className="text-brand-600" />
           </div>
           <p className="mt-2 text-3xl font-semibold text-slate-900">
@@ -318,14 +404,19 @@ export default function BillingPage() {
       {status?.simulated && (
         <section className="card">
           <p className="text-xs text-slate-500">
-            Mode simulation actif (local). Les abonnements sont appliqués sans Stripe.
+            Mode simulation actif (local). Les abonnements sont appliqués sans
+            Stripe.
           </p>
         </section>
       )}
 
       {import.meta.env.DEV && isAdmin && (
         <section className="card">
-          <button type="button" className="btn-secondary" onClick={simulateCancel}>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={simulateCancel}
+          >
             Simuler annulation abonnement (local)
           </button>
         </section>

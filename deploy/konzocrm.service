@@ -1,0 +1,23 @@
+[Unit]
+Description=konzoCRM API
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=konzocrm
+Group=konzocrm
+WorkingDirectory=/opt/konzocrm/current/server
+ExecStart=/opt/konzocrm/node/bin/node src/server.js
+Environment=NODE_ENV=production
+EnvironmentFile=/etc/konzocrm/server.env
+Restart=on-failure
+RestartSec=5
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/konzocrm/uploads
+
+[Install]
+WantedBy=multi-user.target

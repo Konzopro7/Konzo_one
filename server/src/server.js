@@ -36,6 +36,8 @@ mfaKey();
 
 const app = express();
 const port = Number(process.env.PORT || 4000);
+// The VPS uses a local Nginx proxy; never trust arbitrary client headers.
+if (process.env.TRUST_PROXY === "loopback") app.set("trust proxy", "loopback");
 const configuredOrigins = (process.env.CLIENT_URL || "http://localhost:5173")
   .split(",")
   .map((origin) => origin.trim())
@@ -46,7 +48,8 @@ const devOrigins = [
   "http://localhost",
   "http://127.0.0.1"
 ];
-const allowedOrigins = new Set([...configuredOrigins, ...devOrigins]);
+const allowedOrigins = new Set([...configuredOrigins,
+  ...(process.env.NODE_ENV === "production" ? [] : devOrigins)]);
 
 app.use(
   cors({
@@ -132,7 +135,7 @@ app.use((error, req, res, next) => {
   });
 });
 
-app.listen(port, () => {
+app.listen(port, process.env.HOST || "0.0.0.0", () => {
   startReminderScheduler();
   console.log(`${PRODUCT_NAME} API running on http://localhost:${port}`);
 });

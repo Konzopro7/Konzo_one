@@ -6,7 +6,9 @@ dotenv.config();
 const { Pool } = pg;
 
 const ssl =
-  process.env.NODE_ENV === "production"
+  process.env.DB_SSL === "false"
+    ? false
+    : process.env.NODE_ENV === "production"
     ? { rejectUnauthorized: false }
     : false;
 

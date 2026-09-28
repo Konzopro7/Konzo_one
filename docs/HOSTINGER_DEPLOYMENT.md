@@ -1,0 +1,93 @@
+# Hébergement konzoCRM.com
+
+## Architecture installée
+
+VPS Ubuntu Hostinger `76.13.115.72`. Nginx existant, PostgreSQL 16 existant,
+Node 24 installé séparément dans `/opt/konzocrm/node`.
+Le site `kinoushstore.com` conserve son service, sa base et sa configuration.
+
+- Frontend Vite construit avec `--base=/` et `VITE_API_URL=/api`.
+- API Express : service `konzocrm`, écoute uniquement `127.0.0.1:4000`.
+- Nginx transmet `/api/` et `/uploads/` sans changer les routes existantes.
+- Base et rôle dédiés : `konzocrm`. Aucune base existante réinitialisée.
+- Releases : `/opt/konzocrm/releases/`, lien `/opt/konzocrm/current`.
+- Secrets : `/etc/konzocrm/server.env`, permissions `0640 root:konzocrm`.
+- Photos et logos persistants : `/var/lib/konzocrm/uploads`.
+- Sauvegardes privées : `/var/backups/konzocrm`.
+
+La clé MFA d'origine doit être conservée avec la base. Les anciens JWT ne sont
+pas réutilisés : le secret de production est distinct. Les comptes, mots de passe
+et facteurs existants sont conservés.
+
+## Première installation
+
+`deploy/install-vps.sh` exige une nouvelle installation et refuse une base
+`konzocrm` déjà présente. Préparer une archive du code et du build, une archive
+du contenu de `server/uploads`, un export SQL sans propriétaires ni ACL,
+une sauvegarde PostgreSQL native, `create-db.sql` et `server.env` dans
+`/root/konzocrm-transfer` (0700, fichiers 0600). Ne jamais les ajouter au Git.
+
+L'export depuis PostgreSQL 18 vers PostgreSQL 16 retire uniquement le paramètre
+`SET transaction_timeout = 0` absent de PG16. La restauration utilise
+`ON_ERROR_STOP=1`. Vérifier tous les nombres de lignes, les migrations et les
+secrets MFA après restauration. Les URL locales des logos dans `agency_settings`
+et des avatars dans `users` deviennent `https://konzocrm.com/uploads/...`.
+
+## DNS et HTTPS : étape restante
+
+Au déploiement initial, les serveurs GreenGeeks refusaient les requêtes pour ce
+domaine. Il faut activer sa zone DNS puis configurer :
+
+| Type | Nom | Valeur |
+| --- | --- | --- |
+| A | @ | 76.13.115.72 |
+| A | www | 76.13.115.72 |
+
+Ne pas toucher aux MX/TXT de messagerie. Vérifier qu'aucun ancien AAAA pour ces
+deux noms n'envoie les visiteurs vers un autre serveur. La section « Nameserver
+Registration » crée des serveurs DNS privés et ne remplace pas le Zone Editor.
+Pas de sous-domaine API nécessaire pour cette installation.
+
+Une fois les deux noms résolus vers le VPS et le port 80 accessible :
+
+```bash
+bash /opt/konzocrm/current/deploy/activate-https.sh
+curl --fail https://konzocrm.com/api/health
+certbot renew --dry-run
+```
+
+Le certificat Let's Encrypt et le renouvellement utilisent le Certbot existant.
+Le service Nginx existant est rechargé après validation de sa configuration.
+Avant cette activation, le vhost HTTP répond 503 : aucun mot de passe ne doit
+être saisi sur une connexion HTTP publique.
+
+## Vérifications et exploitation
+
+```bash
+systemctl status konzocrm --no-pager
+journalctl -u konzocrm -n 50 --no-pager
+curl --fail http://127.0.0.1:4000/api/health
+bash /opt/konzocrm/current/deploy/backup-vps.sh
+```
+
+Pour les prochaines mises à jour, sauvegarder d'abord. Construire une nouvelle
+release, installer ses dépendances sous Linux, garder les uploads hors de la
+release, analyser les migrations puis les appliquer avec l'environnement de
+production chargé. Changer le lien `current` et redémarrer `konzocrm`.
+Ne pas relancer l'installateur initial. Un retour au code précédent doit tenir
+compte de la compatibilité des migrations, sans écraser des données nouvelles.
+
+Les sauvegardes sur le VPS protègent contre une erreur de déploiement. Prévoir
+aussi une copie hors VPS et une politique de conservation avant l'exploitation
+commerciale. Aucun effacement automatique des sauvegardes n'est configuré.
+Une tâche `/etc/cron.d/konzocrm-backup` lance une sauvegarde chaque jour à
+07:17 UTC via `/usr/local/sbin/konzocrm-backup` (copie stable du script).
+
+## Services externes
+
+SMTP n'était pas configuré au premier transfert. Configurer un expéditeur
+autorisé et ses paramètres SMTP pour la récupération de mot de passe et les
+emails clients. `REMINDERS_ENABLED=false` évite de lancer les anciennes relances
+automatiquement pendant la mise en service. Stripe et GA4 restent configurables
+dans leurs mécanismes existants ; leur connexion réelle doit être vérifiée
+séparément. Ne jamais placer leurs secrets dans `client/.env` ou Git.

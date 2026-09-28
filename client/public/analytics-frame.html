@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="UTF-8"><meta name="referrer" content="no-referrer"><title>konzoCRM.com · Mesure d’audience</title></head><body>
+<script>
+// This separate document never navigates into the CRM and never receives form data.
+let measurementId=null,lastPage=null;
+window.dataLayer=[];
+function gtag(){window.dataLayer.push(arguments);}
+window.addEventListener('message',event=>{
+  if(event.source!==parent||event.origin!==location.origin||event.data?.type!=='ga4-page')return;
+  const data=event.data;
+  const names={'/':'Accueil','/pricing':'Tarification','/login':'Connexion'};
+  if(!Object.hasOwn(names,data.path)||!/^G-[A-Z0-9]{6,20}$/.test(data.measurementId))return;
+  if(measurementId&&measurementId!==data.measurementId)return;
+  const prefix=new URL('.',location.href).pathname.replace(/\/$/,'');
+  const pageLocation=location.origin+prefix+data.path;
+  if(!measurementId){
+    measurementId=data.measurementId;
+    gtag('consent','default',{analytics_storage:'denied',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'});
+    gtag('consent','update',{analytics_storage:'granted'});
+    gtag('js',new Date());
+    gtag('config',measurementId,{send_page_view:false,allow_google_signals:false,allow_ad_personalization_signals:false,page_location:pageLocation,page_referrer:'',page_title:'konzoCRM.com · '+names[data.path]});
+    const script=document.createElement('script');script.async=true;script.src='https://www.googletagmanager.com/gtag/js?id='+measurementId;document.head.appendChild(script);
+  }
+  if(lastPage===data.path)return;
+  lastPage=data.path;
+  gtag('event','page_view',{send_to:measurementId,page_location:pageLocation,page_referrer:'',page_title:'konzoCRM.com · '+names[data.path]});
+});
+parent.postMessage({type:'ga4-ready'},location.origin);
+</script></body></html>

@@ -21,7 +21,7 @@ test("PostgreSQL/HTTP: mandatory MFA, enrollment, replay, recovery, lockout and 
   let listener;
   try {
     // All fixtures shadow real tables on this private connection and vanish at disconnect.
-    await db.query(`CREATE TEMP TABLE agencies (id SERIAL PRIMARY KEY,name TEXT,slug TEXT,plan_tier TEXT DEFAULT 'pro',subscription_status TEXT DEFAULT 'active',trial_ends_at TIMESTAMP,subscription_started_at TIMESTAMP,subscription_ends_at TIMESTAMP);
+    await db.query(`CREATE TEMP TABLE agencies (id SERIAL PRIMARY KEY,name TEXT,slug TEXT,plan_tier TEXT DEFAULT 'pro',subscription_status TEXT DEFAULT 'active',trial_ends_at TIMESTAMP,subscription_started_at TIMESTAMP,subscription_ends_at TIMESTAMP,is_suspended BOOLEAN DEFAULT false);
       CREATE TEMP TABLE users (id SERIAL PRIMARY KEY,agency_id INT REFERENCES agencies(id),full_name TEXT,email TEXT UNIQUE,password_hash TEXT,role TEXT,is_active BOOLEAN DEFAULT true,onboarding_status TEXT DEFAULT 'pending',avatar_url TEXT);
       CREATE TEMP TABLE agency_settings (agency_id INT,agency_name TEXT,agency_email TEXT);
       CREATE TEMP TABLE audit_logs (id SERIAL PRIMARY KEY,agency_id INT,user_id INT,action VARCHAR(20),entity_type TEXT,entity_id INT,path TEXT,status_code INT,metadata JSONB,created_at TIMESTAMP DEFAULT NOW());

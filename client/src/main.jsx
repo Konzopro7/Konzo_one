@@ -5,12 +5,14 @@ import { Toaster } from "react-hot-toast";
 import App from "./App.jsx";
 import "./index.css";
 import { AuthProvider } from "./hooks/useAuth.jsx";
+import AnalyticsConsent from "./components/AnalyticsConsent.jsx";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <BrowserRouter basename={import.meta.env.BASE_URL}>
       <AuthProvider>
         <App />
+        <AnalyticsConsent />
         <Toaster
           position="top-right"
           toastOptions={{

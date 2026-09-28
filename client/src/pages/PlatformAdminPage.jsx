@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import SecurityLog from "../components/SecurityLog.jsx";
+import AdminWorkspaces from "../components/AdminWorkspaces.jsx";
+import AdminAudit from "../components/AdminAudit.jsx";
+import GoogleAnalyticsPanel from "../components/GoogleAnalyticsPanel.jsx";
 import {
   BarElement,
   CategoryScale,
@@ -49,18 +52,25 @@ export default function PlatformAdminPage() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [payload, setPayload] = useState(defaultPayload);
+  const [error,setError]=useState("");
+  const [refresh,setRefresh]=useState(0);
+  const [tab,setTab]=useState("overview");
+  const [updatedAt,setUpdatedAt]=useState(null);
 
   useEffect(() => {
     let active = true;
+    if(!user?.isPlatformAdmin){setLoading(false);return;}
+    setLoading(true);setError("");
     api
       .get("/platform/overview")
       .then(({ data }) => {
         if (active) {
           setPayload(data);
+          setUpdatedAt(new Date());
         }
       })
       .catch((error) => {
-        toast.error(error.response?.data?.message || "Acces admin plateforme refuse.");
+        if(active)setError(error.response?.data?.message || "Console inaccessible. Réessayez.");
       })
       .finally(() => {
         if (active) {
@@ -71,7 +81,7 @@ export default function PlatformAdminPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [user?.isPlatformAdmin,refresh]);
 
   const trafficData = useMemo(
     () => ({
@@ -128,15 +138,20 @@ export default function PlatformAdminPage() {
     <div className="space-y-5">
       <section className="card">
         <h2 className="font-heading text-xl font-semibold text-slate-900">
-          Console admin plateforme
+          Centre de contrôle du SaaS
         </h2>
         <p className="mt-1 text-sm text-slate-500">
           Vue globale de la croissance, des abonnements et du trafic de ton SaaS.
         </p>
         <p className="mt-2 text-sm text-slate-500">Double authentification configurée : {payload.metrics.protectedUsers ?? 0} / {payload.metrics.activeUsers} utilisateurs actifs.</p>
+        <div className="mt-4 flex flex-wrap items-center gap-3"><button className="btn-secondary" onClick={()=>setRefresh(n=>n+1)} disabled={loading}>Actualiser les indicateurs</button>{updatedAt&&<span className="text-xs text-slate-500">Mis à jour à {updatedAt.toLocaleTimeString("fr-CA")}</span>}</div>
       </section>
+      <nav aria-label="Sections d’administration" className="flex flex-wrap gap-2">{[["overview","Vue d’ensemble"],["agencies","Entreprises et utilisateurs"],["ga4","Google Analytics 4"],["security","Connexions et sécurité"],["audit","Interventions admin"]].map(([key,label])=><button key={key} aria-current={tab===key?"page":undefined} className={tab===key?"btn-primary":"btn-secondary"} onClick={()=>setTab(key)}>{label}</button>)}</nav>
+      {error&&<section className="card"><p role="alert" className="text-sm text-red-600">{error}</p></section>}
+      {tab==="agencies"&&<AdminWorkspaces/>}{tab==="ga4"&&<GoogleAnalyticsPanel/>}{tab==="security"&&<SecurityLog endpoint="/platform/security" platform/>}{tab==="audit"&&<AdminAudit/>}
+      {tab==="overview"&&!error&&<>
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <article className="card">
           <p className="text-sm text-slate-500">Agences totales</p>
           <p className="mt-2 font-heading text-2xl font-semibold text-slate-900">
@@ -162,17 +177,19 @@ export default function PlatformAdminPage() {
           </p>
         </article>
         <article className="card">
-          <p className="text-sm text-slate-500">MRR estimé</p>
+          <p className="text-sm text-slate-500">Valeur mensuelle des plans actifs</p>
           <p className="mt-2 font-heading text-2xl font-semibold text-slate-900">
             {formatCurrency(payload.metrics.monthlyRevenueEstimate)}
           </p>
+          <p className="mt-1 text-xs text-slate-500">Estimation tarifaire · ne représente pas les paiements encaissés</p>
         </article>
+        <article className="card"><p className="text-sm text-slate-500">Utilisateurs actifs</p><p className="mt-2 font-heading text-2xl font-semibold text-slate-900">{payload.metrics.activeUsers} / {payload.metrics.totalUsers}</p><p className="mt-1 text-xs text-slate-500">{payload.metrics.suspendedAgencies||0} entreprise(s) suspendue(s)</p></article>
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1.6fr_1fr]">
         <article className="card h-[320px]">
           <h3 className="mb-3 font-heading text-lg font-semibold text-slate-900">Trafic API (30 jours)</h3>
-          <Line
+          <div className="h-60"><Line
             data={trafficData}
             options={{
               maintainAspectRatio: false,
@@ -182,14 +199,14 @@ export default function PlatformAdminPage() {
                 x: { border: { display: false }, grid: { display: false } }
               }
             }}
-          />
+          /></div>
         </article>
 
         <article className="card h-[320px]">
           <h3 className="mb-3 font-heading text-lg font-semibold text-slate-900">
             Nouvelles agences (30 jours)
           </h3>
-          <Bar
+          <div className="h-60"><Bar
             data={signupsData}
             options={{
               maintainAspectRatio: false,
@@ -199,7 +216,7 @@ export default function PlatformAdminPage() {
                 x: { border: { display: false }, grid: { display: false } }
               }
             }}
-          />
+          /></div>
         </article>
       </section>
 
@@ -248,7 +265,7 @@ export default function PlatformAdminPage() {
           </div>
         </article>
       </section>
-      <SecurityLog endpoint="/platform/security" platform />
+      </>}
     </div>
   );
 }

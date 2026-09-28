@@ -99,6 +99,7 @@ function sanitizeUser(user) {
     needsWelcomeGuide: user.onboarding_status === "pending",
     isPlatformAdmin: isPlatformAdminEmail(user.email),
     subscription: {
+      isSuspended: Boolean(user.is_suspended),
       planTier: user.plan_tier || "pro",
       subscriptionStatus: user.subscription_status || "trial",
       trialEndsAt,
@@ -198,6 +199,7 @@ router.post("/login", async (req, res, next) => {
         u.onboarding_status,
         u.avatar_url,
         a.name AS agency_name,
+        a.is_suspended,
         a.plan_tier,
         a.subscription_status,
         a.trial_ends_at
@@ -248,7 +250,7 @@ router.post("/mfa/verify", async (req, res, next) => {
     if (!parsed.success) return res.status(400).json({ message: "Vérifiez votre code de sécurité." });
     const result = await verifyMfa(parsed.data.challengeToken, parsed.data.code, req);
     if (result.status) return res.status(result.status).json({ message: result.message });
-    const { rows } = await query("SELECT name AS agency_name, plan_tier, subscription_status, trial_ends_at FROM agencies WHERE id=$1", [result.user.agency_id]);
+    const { rows } = await query("SELECT name AS agency_name, plan_tier, subscription_status, trial_ends_at, is_suspended FROM agencies WHERE id=$1", [result.user.agency_id]);
     return res.json({ token: createAuthToken(result.user, { mfaVerified: true }), user: sanitizeUser({ ...result.user, ...rows[0] }), ...(result.recoveryCodes ? { recoveryCodes: result.recoveryCodes } : {}) });
   } catch (error) { next(error); }
 });
@@ -267,6 +269,7 @@ router.get("/me", requireAuth, async (req, res, next) => {
         u.mfa_enabled,
         u.avatar_url,
         a.name AS agency_name,
+        a.is_suspended,
         a.plan_tier,
         a.subscription_status,
         a.trial_ends_at

@@ -53,6 +53,17 @@ test("welcome preference exemption does not unlock other routes", async t => {
   assert.equal(result.res.statusCode, 402);
 });
 
+test("suspended workspaces lose business access without preventing account recovery", async t => {
+  const result=await authenticate(t,{subscription:{...agency,is_suspended:true}});
+  assert.equal(result.res.statusCode,403);
+  assert.equal(result.res.body.code,"WORKSPACE_SUSPENDED");
+});
+test("suspended workspaces can access the profile but stay marked as suspended",async t=>{
+  const result=await authenticate(t,{subscription:{...agency,is_suspended:true},baseUrl:"/api/auth",path:"/me"});
+  assert.equal(result.nextCalled,true);
+  assert.equal(result.req.user.subscription.isSuspended,true);
+});
+
 for (const [name, user] of [["disabled", { ...account, is_active: false }], ["deleted", null]]) {
   test(`${name} users cannot reuse a valid JWT`, async (t) => {
     const result = await authenticate(t, { user });

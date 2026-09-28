@@ -21,7 +21,8 @@ export function useAuth() { return globalThis.__workspaceTest.auth; }
 export function useTour() { return globalThis.__workspaceTest.tour || {startTour() {}}; }
 export const api = {
  post: async (path, data) => { globalThis.__workspaceTest.posted = {path,data}; if(globalThis.__workspaceTest.failPost) throw {response:{data:{message:globalThis.__workspaceTest.postError || 'Code refusé'}}}; return {data: path.endsWith('/setup') ? {secret:'FIXTURE',qrCode:'data:image/png;base64,fixture'} : path.includes('password') ? {message:'Demande traitée'} : globalThis.__workspaceTest.mfaSession}; },
- get: async path => { if(globalThis.__workspaceTest.failLoad) throw Error('offline'); return {data: path === '/clients' ? globalThis.__workspaceTest.clients : path.startsWith('/clients/') ? globalThis.__workspaceTest.clientDetail : globalThis.__workspaceTest.settings}; },
+ get: async (path, options) => { globalThis.__workspaceTest.lastGet={path,options}; if(globalThis.__workspaceTest.failLoad) throw Error('offline'); return {data: globalThis.__workspaceTest.responses?.[path] ?? (path === '/clients' ? globalThis.__workspaceTest.clients : path.startsWith('/clients/') ? globalThis.__workspaceTest.clientDetail : globalThis.__workspaceTest.settings)}; },
+ patch: async (path,data) => {globalThis.__workspaceTest.patched={path,data}; if(globalThis.__workspaceTest.failPatch) throw {response:{data:{message:'Modification refusée'}}}; return {data:{ok:true}};},
  put: async (path, data) => { globalThis.__workspaceTest.saved = {path, data}; return {data}; }
 };
 export const toast = { success() {}, error() {} };
@@ -90,6 +91,9 @@ const { default: Profile } = await import(
 );
 const { default: MfaLogin } = await import(pathToFileURL(await compile(path.join(root, "src/components/MfaLogin.jsx"))));
 const { default: PasswordRecovery } = await import(pathToFileURL(await compile(path.join(root, "src/components/PasswordRecovery.jsx"))));
+const {default: AdminWorkspaces}=await import(pathToFileURL(await compile(path.join(root,"src/components/AdminWorkspaces.jsx"))));
+const {default: AnalyticsConsent}=await import(pathToFileURL(await compile(path.join(root,"src/components/AnalyticsConsent.jsx"))));
+const {default: GoogleAnalyticsPanel}=await import(pathToFileURL(await compile(path.join(root,"src/components/GoogleAnalyticsPanel.jsx"))));
 let view;
 async function render(Component, props = {}, initialEntries = ["/"]) {
   await act(async () => {
@@ -220,6 +224,46 @@ test("missing and expired recovery links show how to request a new link", async 
   await act(async () => root.findByType("form").props.onSubmit({preventDefault() {}}));
   assert.equal(root.findByProps({role:"alert"}).props.children,"Lien expiré");
   assert.ok(root.findAllByType("a").some(node => node.props.href === "/forgot-password"));
+});
+
+test("platform table scopes company modules and preserves an unsuccessful access change",async()=>{
+  globalThis.__workspaceTest.auth.user={id:1,agencyId:1};
+  globalThis.__workspaceTest.responses={"/platform/agencies":{items:[{id:2,name:"Other",plan_tier:"pro",subscription_status:"active",users:2,clients:1}],hasMore:false},"/platform/agencies/2/users":{items:[{id:3,title:"Sales",role:"commercial",is_active:true,mfa_enabled:true}],columns:["title","role","is_active"],hasMore:false}};
+  const root=await render(AdminWorkspaces);
+  await act(async()=>root.findAllByType("button").find(b=>b.props.children==="Consulter").props.onClick());
+  assert.equal(globalThis.__workspaceTest.lastGet.path,"/platform/agencies/2/users");
+  await act(async()=>root.findAllByType("button").find(b=>b.props.children==="Gérer l’accès").props.onClick());
+  await act(async()=>root.findByProps({id:"admin-role"}).props.onChange({target:{value:"readonly"}}));
+  await act(async()=>root.findByProps({id:"admin-reason"}).props.onChange({target:{value:"Accès revu par administrateur"}}));
+  globalThis.__workspaceTest.failPatch=true;
+  await act(async()=>root.findByProps({role:"dialog"}).findByType("form").props.onSubmit({preventDefault(){}}));
+  assert.equal(globalThis.__workspaceTest.patched.path,"/platform/users/3");
+  assert.equal(globalThis.__workspaceTest.patched.data.role,"readonly");
+  assert.equal(root.findByProps({role:"alert"}).props.children,"Modification refusée");
+  assert.equal(root.findByProps({id:"admin-role"}).props.value,"readonly");
+});
+
+test("GA4 reports show missing configuration rather than invented metrics",async()=>{
+  globalThis.__workspaceTest.responses={"/platform/analytics/config":{enabled:false,measurementId:"",propertyId:"",credentialsConfigured:false},"/platform/analytics/report":{configured:false}};
+  const root=await render(GoogleAnalyticsPanel);
+  assert.ok(root.findAllByType("h4").some(node=>node.props.children==="Connexion Google à compléter"));
+  assert.equal(root.findByProps({id:"ga4-measurement"}).props.value,"");
+});
+
+test("Google iframe requires consent and is absent from private CRM pages",async t=>{
+  const previous={window:globalThis.window,localStorage:globalThis.localStorage,document:globalThis.document};
+  const storage=new Map();
+  globalThis.window={location:{origin:"http://localhost"},addEventListener(){},removeEventListener(){}};
+  globalThis.localStorage={getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value)};
+  globalThis.document={cookie:"",location:{hostname:"localhost"}};
+  t.after(async()=>{if(view){await act(async()=>view.unmount());view=null;}for(const [key,value]of Object.entries(previous)){if(value===undefined)delete globalThis[key];else globalThis[key]=value;}});
+  globalThis.__workspaceTest.responses={"/analytics/config":{enabled:true,measurementId:"G-ABCDEF1234"}};
+  let root=await render(AnalyticsConsent,{},["/pricing"]);
+  assert.equal(root.findAllByType("iframe").length,0);
+  await act(async()=>root.findAllByType("button").find(b=>b.props.children==="Accepter").props.onClick());
+  assert.equal(root.findAllByType("iframe").length,1);
+  root=await render(AnalyticsConsent,{},["/reset-password#token=private"]);
+  assert.equal(root.findAllByType("iframe").length,0);
 });
 after(async () => {
   if (view) act(() => view.unmount());

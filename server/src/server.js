@@ -22,6 +22,7 @@ import platformRoutes from "./routes/platform.js";
 import pipelineRoutes from "./routes/pipeline.js";
 import uploadRoutes, { uploadRoot } from "./routes/uploads.js";
 import auditRoutes from "./routes/audit.js";
+import analyticsRoutes from "./routes/analytics.js";
 import portalRoutes from "./routes/portal.js";
 import chatbotRoutes from "./routes/chatbot.js";
 import { requestLogger } from "./middleware/requestLogger.js";
@@ -94,6 +95,7 @@ app.get("/api/health", async (req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
+app.use("/api/analytics", analyticsRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/clients", clientsRoutes);
 app.use("/api/quotes", quotesRoutes);

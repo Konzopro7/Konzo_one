@@ -1,6 +1,6 @@
 import { PRODUCT_NAME } from "../../../shared/brand.mjs";
 import { useEffect, useMemo, useState } from "react";
-import { Link, Navigate, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useLocation, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
   Eye,
@@ -64,11 +64,12 @@ function PlanPill({ activePlan }) {
 }
 
 export default function LoginPage({ recoveryMode = null }) {
-  const { isAuthenticated, login, register } = useAuth();
+  const { isAuthenticated, user, login, register } = useAuth();
+  const routeLocation=useLocation();
   const [searchParams] = useSearchParams();
   const redirectAfterAuth = useMemo(
-    () => parseNext(searchParams),
-    [searchParams],
+    () => searchParams.has("next") ? parseNext(searchParams) : routeLocation.state?.from ? parseNext(new URLSearchParams({next:routeLocation.state.from})) : user?.isPlatformAdmin ? "/platform" : "/dashboard",
+    [searchParams,routeLocation.state,user?.isPlatformAdmin],
   );
   const [mode, setMode] = useState(() => parseMode(searchParams));
   const [loading, setLoading] = useState(false);

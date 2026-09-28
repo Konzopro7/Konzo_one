@@ -61,7 +61,8 @@ export async function requireAuth(req, res, next) {
         subscription_status,
         trial_ends_at,
         subscription_started_at,
-        subscription_ends_at
+        subscription_ends_at,
+        is_suspended
        FROM agencies
        WHERE id = $1`,
       [user.agencyId]
@@ -72,6 +73,9 @@ export async function requireAuth(req, res, next) {
     }
 
     const agency = agencyRes.rows[0];
+    if (agency.is_suspended && !isExemptPath(buildFullPath(req))) {
+      return res.status(403).json({code:"WORKSPACE_SUSPENDED",message:"Votre entreprise est suspendue. Contactez l’administrateur de la plateforme."});
+    }
     let subscriptionStatus = agency.subscription_status || "trial";
     const trialEndsAt = agency.trial_ends_at || null;
 
@@ -94,6 +98,7 @@ export async function requireAuth(req, res, next) {
     }
 
     user.subscription = {
+      isSuspended:Boolean(agency.is_suspended),
       planTier: agency.plan_tier || "pro",
       subscriptionStatus,
       trialEndsAt,

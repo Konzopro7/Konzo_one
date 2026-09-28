@@ -5,6 +5,7 @@ import Sidebar from "./Sidebar.jsx";
 import Topbar from "./Topbar.jsx";
 import WelcomeGuide from "../components/WelcomeGuide.jsx";
 import { TourProvider } from "../hooks/useTour.jsx";
+import { useAuth } from "../hooks/useAuth.jsx";
 
 const pageTitles = {
   "/guide": "Guide de prise en main",
@@ -41,6 +42,7 @@ const pageDescriptions = {
   "/billing": "Le bon plan pour la prochaine étape de votre agence.",
 };
 export default function AppLayout() {
+  const {user}=useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
 
@@ -66,7 +68,7 @@ export default function AppLayout() {
             </p>
           </div>
           <Suspense fallback={<section className="card"><p className="text-sm text-slate-500">Chargement de la page…</p></section>}>
-            <Outlet />
+            {user?.subscription?.isSuspended && !["/profile","/billing","/platform","/guide"].includes(location.pathname) ? <section className="card"><p role="alert" className="text-sm text-red-600">Votre entreprise est suspendue. Contactez l’administrateur de la plateforme pour rétablir l’accès.</p></section> : <Outlet />}
           </Suspense>
         </main>
       </div>

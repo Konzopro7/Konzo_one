@@ -1,0 +1,74 @@
+import { useEffect, useState } from "react";
+import api from "../lib/api.js";
+import Modal from "./Modal.jsx";
+import { useAuth } from "../hooks/useAuth.jsx";
+import { formatDate, formatCurrency } from "../lib/format.js";
+
+const modules={users:"Utilisateurs",clients:"Contacts",prospects:"Prospects",opportunities:"Opportunités",quotes:"Devis",invoices:"Factures",suppliers:"Fournisseurs",purchases:"Achats",expenses:"Dépenses",inventory:"Inventaire"};
+const labels={title:"Nom / référence",email:"Email",role:"Rôle",is_active:"Accès",mfa_enabled:"Double facteur",created_at:"Création",company:"Entreprise",phone:"Téléphone",source:"Source",status:"Statut",amount:"Montant",probability:"Probabilité (%)",client_id:"Contact #",due_date:"Échéance",category:"Catégorie",sku:"SKU",stock_quantity:"Stock",id:"Identifiant",name:"Nom",full_name:"Nom complet",first_name:"Prénom",last_name:"Nom de famille",job_title:"Fonction",phone_secondary:"Deuxième téléphone",address:"Adresse",city:"Ville",province:"Province",postal_code:"Code postal",country:"Pays",preferred_language:"Langue préférée",tags:"Tags",notes:"Notes",updated_at:"Dernière modification",owner_id:"Responsable #",assigned_to:"Responsable #",onboarding_status:"Accueil du compte",quote_number:"Numéro de devis",invoice_number:"Numéro de facture",purchase_number:"Numéro d’achat",expense_number:"Numéro de dépense",issue_date:"Date d’émission",valid_until:"Validité",expense_date:"Date de dépense",payment_method:"Mode de paiement",subtotal:"Sous-total",tax_rate:"Taux de taxe",tax_amount:"Taxes",total:"Total",receipt_url:"Document justificatif",stage:"Étape",value:"Valeur",expected_close_date:"Conclusion prévue",unit:"Unité",cost_price:"Prix de revient",sale_price:"Prix de vente",min_stock_alert:"Seuil d’alerte de stock",quote_id:"Devis associé #",invoice_id:"Facture associée #",prospect_id:"Prospect associé #",supplier_id:"Fournisseur #",converted_client_id:"Contact converti #"};
+const roles={admin:"Administrateur",commercial:"Commercial",finance:"Comptable",readonly:"Lecture seule"};
+const statuses={active:"Actif",trial:"Essai",past_due:"En retard",canceled:"Annulé",draft:"Brouillon",sent:"Envoyé",accepted:"Accepté",refused:"Refusé",pending:"En attente",paid:"Réglé",new:"Nouveau",qualified:"Qualifié",lost:"Perdu",converted:"Converti",lead:"Nouveau",discovery:"Découverte",proposal:"Proposition",won:"Gagné",approved:"Approuvé",rejected:"Refusé",ordered:"Commandé",received:"Reçu",cancelled:"Annulé"};
+export default function AdminWorkspaces(){
+  const {user}=useAuth();
+  const [selected,setSelected]=useState(null),[module,setModule]=useState("users"),[page,setPage]=useState(1);
+  const [search,setSearch]=useState(""),[filter,setFilter]=useState(""),[searchValue,setSearchValue]=useState("");
+  const [data,setData]=useState({items:[],columns:[],hasMore:false}),[loading,setLoading]=useState(true),[error,setError]=useState("");
+  const [refresh,setRefresh]=useState(0),[edit,setEdit]=useState(null),[reason,setReason]=useState(""),[busy,setBusy]=useState(false),[formError,setFormError]=useState("");
+  const [detail,setDetail]=useState(null),[detailError,setDetailError]=useState("");
+  async function showDetail(row){setDetail({title:row.title,loading:true});setDetailError("");try{const{data}=await api.get(`/platform/agencies/${selected.id}/${module}/${row.id}`);setDetail({title:row.title,...data,loading:false});}catch(e){setDetailError(e.response?.data?.message||"Fiche inaccessible.");setDetail({title:row.title,loading:false});}}
+  useEffect(()=>{
+    let active=true;setLoading(true);setError("");
+    api.get(selected?`/platform/agencies/${selected.id}/${module}`:"/platform/agencies",{params:{page,search,status:filter}}).then(({data})=>{if(active)setData(data);}).catch(e=>{if(active)setError(e.response?.data?.message||"Chargement impossible. Réessayez.");}).finally(()=>{if(active)setLoading(false);});
+    return()=>{active=false;};
+  },[selected?.id,module,page,search,filter,refresh]);
+  function openEdit(kind,row){setEdit({kind,row,role:row.role,isActive:row.is_active,isSuspended:row.is_suspended,planTier:row.plan_tier,subscriptionStatus:row.subscription_status});setReason("");setFormError("");}
+  async function save(event){
+    event.preventDefault();if(busy)return;setBusy(true);setFormError("");
+    try{
+      const body=edit.kind==="user"?{role:edit.role,isActive:edit.isActive,reason}:{isSuspended:edit.isSuspended,...(!edit.row.stripe_managed?{planTier:edit.planTier,subscriptionStatus:edit.subscriptionStatus}:{}),reason};
+      await api.patch(`/platform/${edit.kind==="user"?"users":"agencies"}/${edit.row.id}`,body);
+      if(edit.kind==="agency"&&selected?.id===edit.row.id)setSelected(prev=>({...prev,is_suspended:edit.isSuspended,plan_tier:edit.planTier,subscription_status:edit.subscriptionStatus}));
+      setEdit(null);setRefresh(n=>n+1);
+    }catch(e){setFormError(e.response?.data?.message||"Modification impossible.");}finally{setBusy(false);}
+  }
+  function select(row){setLoading(true);setData({items:[],columns:[],hasMore:false});setSelected(row);setModule("users");setPage(1);setSearch("");setSearchValue("");setFilter("");}
+  function cell(column,value){if(column==="is_active")return value?"Actif":"Désactivé";if(column==="mfa_enabled")return value?"Configuré":"À configurer";if(column==="created_at"||column==="due_date")return formatDate(value);if(column==="role")return roles[value]||value;if(column==="status")return statuses[value]||value;if(column==="amount")return formatCurrency(value,selected?.currency||"CAD");return value??"—";}
+  return <div className="space-y-4">
+    <section className="card space-y-4">
+      <div className="flex flex-wrap justify-between items-start gap-3"><div><h3 className="font-heading text-xl font-semibold">{selected?selected.name:"Entreprises de la plateforme"}</h3><p className="mt-1 text-sm text-slate-500">{selected?"Consultez les modules de cette entreprise et gérez les accès de son équipe.":"Supervisez les espaces, leurs abonnements et leurs accès."}</p></div>
+        {selected&&<div className="flex flex-wrap gap-2"><button className="btn-secondary" onClick={()=>{setSelected(null);setPage(1);setSearch("");setSearchValue("");}}>Retour aux entreprises</button><button className="btn-primary" onClick={()=>openEdit("agency",selected)}>Gérer l’entreprise</button></div>}
+      </div>
+      {selected&&<div className="flex flex-wrap gap-2">{Object.entries(modules).map(([key,label])=><button key={key} className={key===module?"btn-primary":"btn-secondary"} onClick={()=>{setModule(key);setPage(1);setSearch("");setSearchValue("");}}>{label}</button>)}</div>}
+      <form className="flex flex-wrap gap-2" onSubmit={e=>{e.preventDefault();setPage(1);setSearch(searchValue);}}>
+        <input aria-label="Rechercher dans le tableau administrateur" className="field-input min-w-0 flex-1" value={searchValue} onChange={e=>setSearchValue(e.target.value)} maxLength={120} placeholder={selected?"Nom, référence ou email":"Rechercher une entreprise"}/>
+        {!selected&&<select aria-label="Filtrer les abonnements" className="field-input sm:w-auto" value={filter} onChange={e=>{setFilter(e.target.value);setPage(1);}}><option value="">Tous les abonnements</option>{["active","trial","past_due","canceled"].map(value=><option key={value} value={value}>{statuses[value]}</option>)}</select>}
+        <button className="btn-secondary" disabled={loading}>Rechercher</button><button className="btn-secondary" type="button" disabled={loading} onClick={()=>setRefresh(n=>n+1)}>Actualiser</button>
+      </form>
+    </section>
+    <section className="card overflow-hidden">
+      {loading?<p role="status" className="text-sm text-slate-500">Chargement…</p>:error?<p role="alert" className="text-sm text-red-600">{error}</p>:data.items.length===0?<p className="text-sm text-slate-500">Aucun résultat trouvé.</p>:<div className="overflow-x-auto"><table className="min-w-full text-left text-sm">
+        <thead><tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">{(selected?data.columns:["Entreprise","Plan","Abonnement","Accès","Utilisateurs","Contacts"]).map(key=><th key={key} className="pb-3 pr-4 whitespace-nowrap">{labels[key]||key}</th>)}<th className="pb-3">Actions</th></tr></thead>
+        <tbody>{data.items.map(row=><tr key={row.id} className="border-b border-slate-100 last:border-0">{selected?data.columns.map(key=><td key={key} className="py-3 pr-4 text-slate-700">{cell(key,row[key])}</td>):<><td className="py-3 pr-4"><p className="font-semibold">{row.name}</p><p className="text-xs text-slate-500">Créée le {formatDate(row.created_at)}</p></td><td className="py-3 pr-4 uppercase">{row.plan_tier}</td><td className="py-3 pr-4">{statuses[row.subscription_status]}{row.stripe_managed&&<p className="text-xs text-slate-500">Stripe</p>}</td><td className="py-3 pr-4"><span className={`rounded-full px-2 py-1 text-xs font-semibold ${row.is_suspended?"bg-red-50 text-red-700":"bg-teal-50 text-teal-700"}`}>{row.is_suspended?"Suspendu":"Ouvert"}</span></td><td className="py-3 pr-4">{row.users}</td><td className="py-3 pr-4">{row.clients}</td></>}
+          <td className="py-3"><div className="flex gap-2">{!selected?<><button className="btn-secondary" onClick={()=>select(row)}>Consulter</button><button className="btn-secondary" onClick={()=>openEdit("agency",row)}>Gérer</button></>:<><button className="btn-secondary" onClick={()=>showDetail(row)}>Voir la fiche</button>{module==="users"&&<button className="btn-secondary" disabled={row.id===user.id} onClick={()=>openEdit("user",row)}>Gérer l’accès</button>}</>}</div></td>
+        </tr>)}</tbody></table></div>}
+      <div className="mt-4 flex items-center justify-between gap-2"><button className="btn-secondary" disabled={loading||page===1} onClick={()=>setPage(p=>p-1)}>Précédent</button><p className="text-sm text-slate-500">Page {page}</p><button className="btn-secondary" disabled={loading||!!error||!data.hasMore} onClick={()=>setPage(p=>p+1)}>Suivant</button></div>
+      {selected&&module!=="users"&&<p className="mt-3 text-xs text-slate-500">Montants dans la devise configurée par l’entreprise. Les documents et opérations restent dans leurs modules existants.</p>}
+    </section>
+    <Modal isOpen={!!edit} title={edit?.kind==="user"?`Accès de ${edit.row.title}`:`Gestion de ${edit?.row.name}`} onClose={()=>setEdit(null)} closeDisabled={busy}>
+      {edit&&<form className="space-y-4" onSubmit={save}>
+        {edit.kind==="user"?<><label className="field-label" htmlFor="admin-role">Rôle</label><select id="admin-role" className="field-input" disabled={busy} value={edit.role} onChange={e=>setEdit({...edit,role:e.target.value})}>{Object.entries(roles).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={edit.isActive} disabled={busy} onChange={e=>setEdit({...edit,isActive:e.target.checked})}/>Compte actif</label><p className="text-sm text-slate-500">Les sessions du compte seront invalidées. La double authentification reste obligatoire.</p></>:<>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" disabled={busy||edit.row.id===user.agencyId} checked={edit.isSuspended} onChange={e=>setEdit({...edit,isSuspended:e.target.checked})}/>Suspendre l’accès à cet espace</label>
+          <div><label className="field-label" htmlFor="admin-plan">Plan</label><select id="admin-plan" className="field-input" disabled={busy||edit.row.stripe_managed} value={edit.planTier} onChange={e=>setEdit({...edit,planTier:e.target.value})}><option value="pro">Pro</option><option value="premium">Premium</option></select></div>
+          <div><label className="field-label" htmlFor="admin-subscription">Statut d’abonnement</label><select id="admin-subscription" className="field-input" disabled={busy||edit.row.stripe_managed} value={edit.subscriptionStatus} onChange={e=>setEdit({...edit,subscriptionStatus:e.target.value})}>{["trial","active","past_due","canceled"].map(value=><option key={value} value={value}>{statuses[value]}</option>)}</select></div>
+          <p className="text-sm text-slate-500">{edit.row.stripe_managed?"Cet abonnement est synchronisé avec Stripe. Ses changements de plan et de facturation se font dans Stripe.":"La modification administrative ne déclenche aucun paiement. Un essai conserve sa date d’expiration actuelle."}</p>
+        </>}
+        <div><label className="field-label" htmlFor="admin-reason">Motif de l’intervention</label><textarea id="admin-reason" className="field-input" minLength={10} maxLength={500} required disabled={busy} value={reason} onChange={e=>setReason(e.target.value)}/></div>
+        {formError&&<p role="alert" className="text-sm text-red-600">{formError}</p>}
+        <button className="btn-primary" disabled={busy}>{busy?"Enregistrement…":"Confirmer les modifications"}</button>
+      </form>}
+    </Modal>
+    <Modal isOpen={!!detail} title={`Fiche · ${detail?.title||""}`} onClose={()=>setDetail(null)} closeDisabled={detail?.loading}>
+      {detail?.loading?<p role="status">Chargement de la fiche…</p>:detailError?<p role="alert" className="text-sm text-red-600">{detailError}</p>:detail?.record&&<div className="space-y-5"><dl className="grid gap-4 sm:grid-cols-2">{Object.entries(detail.record).filter(([,value])=>value!==null&&value!=="").map(([key,value])=><div key={key}><dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">{labels[key]||key.replaceAll("_"," ")}</dt><dd className="mt-1 text-sm text-slate-800 whitespace-pre-wrap break-words">{typeof value==="boolean"?(value?"Oui":"Non"):Array.isArray(value)?value.join(", "):typeof value==="object"?JSON.stringify(value):["total","subtotal","tax_amount","value","cost_price","sale_price"].includes(key)?formatCurrency(value,selected?.currency||"CAD"):key.endsWith("_at")||key.endsWith("_date")||["valid_until","due_date"].includes(key)?formatDate(value):statuses[value]||roles[value]||String(value)}</dd></div>)}</dl>{detail.items?.length>0&&<div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead><tr className="border-b text-slate-500"><th className="pb-3">Description</th><th className="pb-3">Quantité</th><th className="pb-3">Prix unitaire</th><th className="pb-3">Total</th></tr></thead><tbody>{detail.items.map((item,index)=><tr key={index} className="border-b border-slate-100"><td className="py-3 pr-3 whitespace-pre-wrap">{item.description}</td><td className="py-3 pr-3">{item.quantity}</td><td className="py-3 pr-3">{formatCurrency(item.unit_price,selected?.currency||"CAD")}</td><td className="py-3">{formatCurrency(item.line_total,selected?.currency||"CAD")}</td></tr>)}</tbody></table></div>}</div>}
+    </Modal>
+  </div>;
+}

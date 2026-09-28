@@ -3,9 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { PRODUCT_NAME } from "../../../shared/brand.mjs";
 import { useAuth } from "../hooks/useAuth.jsx";
 import Modal from "./Modal.jsx";
+import { useTour } from "../hooks/useTour.jsx";
 
 export default function WelcomeGuide() {
   const { user, dismissWelcomeGuide } = useAuth();
+  const { startTour } = useTour();
   const navigate = useNavigate();
   const busy = useRef(false);
   const contentRef = useRef(null);
@@ -50,7 +52,8 @@ export default function WelcomeGuide() {
     try {
       await dismissWelcomeGuide();
       setClosed(true);
-      if (discover) navigate("/guide");
+      if (discover === "tour") startTour();
+      else if (discover) navigate("/guide");
     } catch {
       setError("Votre choix n’a pas pu être enregistré. Vérifiez votre connexion puis réessayez.");
     } finally {
@@ -70,7 +73,8 @@ export default function WelcomeGuide() {
         </div>
         {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
         <div className="flex flex-wrap gap-3">
-          <button type="button" className="btn-primary" disabled={saving} onClick={() => finish(true)}>{saving ? "Enregistrement…" : "Découvrir le guide"}</button>
+          <button type="button" className="btn-primary" disabled={saving} onClick={() => finish("tour")}>{saving ? "Enregistrement…" : "Me guider dans le CRM"}</button>
+          <button type="button" className="btn-secondary" disabled={saving} onClick={() => finish(true)}>Découvrir le guide</button>
           <button type="button" className="btn-secondary" disabled={saving} onClick={() => finish()}>Plus tard</button>
         </div>
       </div>

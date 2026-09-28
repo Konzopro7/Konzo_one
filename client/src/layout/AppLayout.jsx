@@ -1,9 +1,10 @@
 import { PRODUCT_NAME } from "../../../shared/brand.mjs";
 import { Outlet, useLocation } from "react-router-dom";
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import Sidebar from "./Sidebar.jsx";
 import Topbar from "./Topbar.jsx";
 import WelcomeGuide from "../components/WelcomeGuide.jsx";
+import { TourProvider } from "../hooks/useTour.jsx";
 
 const pageTitles = {
   "/guide": "Guide de prise en main",
@@ -49,13 +50,13 @@ export default function AppLayout() {
   );
 
   return (
-    <div className="app-shell min-h-screen">
+    <TourProvider><div className="app-shell min-h-screen">
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       <div className="min-h-screen lg:pl-[252px]">
         <Topbar onOpenSidebar={() => setSidebarOpen(true)} />
         <main className="page-content px-4 py-6 sm:px-7 lg:px-9">
-          <div className="page-heading mb-7">
+          <div className="page-heading mb-7" data-tour="page-heading">
             <h1 className="font-heading text-2xl font-semibold tracking-tight text-slate-900">
               {title}
             </h1>
@@ -64,10 +65,12 @@ export default function AppLayout() {
                 "Un espace pour organiser votre activité et avancer ensemble."}
             </p>
           </div>
-          <Outlet />
+          <Suspense fallback={<section className="card"><p className="text-sm text-slate-500">Chargement de la page…</p></section>}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
       <WelcomeGuide />
-    </div>
+    </div></TourProvider>
   );
 }

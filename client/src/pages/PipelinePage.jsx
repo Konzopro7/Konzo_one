@@ -189,7 +189,7 @@ export default function PipelinePage() {
           <div className="mb-4 flex items-center justify-between gap-3">
             <h2 className="font-heading text-lg font-semibold text-slate-900">Prospects</h2>
             {canWrite ? (
-              <button className="btn-primary gap-2" type="button" onClick={() => setProspectModalOpen(true)}>
+              <button data-tour="prospect-create" className="btn-primary gap-2" type="button" onClick={() => setProspectModalOpen(true)}>
                 <Plus size={14} />
                 Prospect
               </button>

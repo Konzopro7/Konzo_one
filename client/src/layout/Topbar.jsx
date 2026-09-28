@@ -165,7 +165,7 @@ export default function Topbar({ onOpenSidebar }) {
         </div>
 
         <div className="ml-auto flex items-center gap-3">
-          <Link to="/guide" className="btn-secondary gap-2" aria-label="Ouvrir le guide de prise en main">
+          <Link to="/guide" data-tour="guide-link" className="btn-secondary gap-2" aria-label="Ouvrir le guide de prise en main">
             <BookOpen size={18} aria-hidden="true" />
             <span className="hidden sm:inline">Guide</span>
           </Link>
@@ -262,7 +262,7 @@ export default function Topbar({ onOpenSidebar }) {
             ) : null}
           </div>
 
-          <Link to="/profile" aria-label="Personnaliser mon profil" className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-2 py-2 shadow-sm sm:max-w-[260px] sm:px-3">
+          <Link to="/profile" data-tour="profile-link" aria-label="Personnaliser mon profil" className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-2 py-2 shadow-sm sm:max-w-[260px] sm:px-3">
             <UserAvatar name={user?.fullName} src={user?.avatarUrl} />
             <div className="hidden min-w-0 sm:block">
               <p className="truncate text-sm font-semibold text-slate-800" title={user?.fullName}>

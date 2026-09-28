@@ -219,7 +219,7 @@ export default function InvoicesPage() {
               Numerotation auto, statut de paiement et encaissement Stripe.
             </p>
           </div>
-          <button type="button" onClick={openCreateModal} className="btn-primary">
+          <button data-tour="invoice-create" type="button" onClick={openCreateModal} className="btn-primary">
             Nouvelle facture
           </button>
         </div>
@@ -231,7 +231,7 @@ export default function InvoicesPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
-              <thead>
+              <thead data-tour="invoices-list">
                 <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
                   <th className="pb-3">Facture</th>
                   <th className="pb-3">Client</th>

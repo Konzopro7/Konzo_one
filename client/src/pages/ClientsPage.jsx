@@ -150,6 +150,7 @@ export default function ClientsPage() {
             </p>
           </div>
           {canWrite && <button
+            data-tour="client-create"
             type="button"
             onClick={openCreateModal}
             className="btn-primary gap-2"
@@ -176,6 +177,7 @@ export default function ClientsPage() {
             <input
               className="field-input pl-10"
               aria-label="Rechercher un client"
+              data-tour="client-search"
               placeholder="Nom, entreprise, email…"
               value={search}
               onChange={(event) => setSearch(event.target.value)}

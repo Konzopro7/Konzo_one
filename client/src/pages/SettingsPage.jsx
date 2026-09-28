@@ -278,7 +278,7 @@ export default function SettingsPage() {
                   <p>Votre marque, sur chaque document et chaque échange.</p>
                 </div>
               </div>
-              <div className="logo-upload">
+              <div className="logo-upload" data-tour="company-logo">
                 <img
                   src={form.logoUrl || defaultLogoSrc}
                   alt="Logo de votre agence"

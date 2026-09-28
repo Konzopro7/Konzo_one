@@ -18,6 +18,7 @@ await writeFile(
   mockPath,
   `
 export function useAuth() { return globalThis.__workspaceTest.auth; }
+export function useTour() { return globalThis.__workspaceTest.tour || {startTour() {}}; }
 export const api = {
  get: async path => { if(globalThis.__workspaceTest.failLoad) throw Error('offline'); return {data: path === '/clients' ? globalThis.__workspaceTest.clients : path.startsWith('/clients/') ? globalThis.__workspaceTest.clientDetail : globalThis.__workspaceTest.settings}; },
  put: async (path, data) => { globalThis.__workspaceTest.saved = {path, data}; return {data}; }
@@ -39,6 +40,8 @@ async function compile(file) {
     let replacement;
     if (specifier.endsWith("hooks/useAuth.jsx"))
       replacement = `import { useAuth } from '${pathToFileURL(mockPath)}';`;
+    else if (specifier.endsWith("hooks/useTour.jsx"))
+      replacement = `import { useTour } from '${pathToFileURL(mockPath)}';`;
     else if (specifier.endsWith("lib/api.js"))
       replacement = `import { api } from '${pathToFileURL(mockPath)}';`;
     else if (specifier.endsWith("lib/uploads.js"))
@@ -385,4 +388,23 @@ test("profile upload preview uses the existing uploader and rejects oversized im
   await act(async () => input.props.onChange({ target: { files: [{ type: "image/png", size: 6 * 1024 * 1024 }], value: "photo.png" } }));
   assert.equal(ui.findAllByProps({ role: "alert" }).length, 1);
   assert.equal(ui.findByType("img").props.src, "/uploads/test.png");
+});
+
+test("guide can start the interactive tour and welcome waits for preference persistence", async () => {
+  let started = 0;
+  globalThis.__workspaceTest.tour = { startTour() { started++; } };
+  let ui = await render(Guide);
+  act(() => ui.findAllByType("button").find(item => item.children.includes("Lancer la visite interactive")).props.onClick());
+  assert.equal(started, 1);
+  act(() => view.unmount());
+  globalThis.__workspaceTest.auth.user.needsWelcomeGuide = true;
+  let saves = 0;
+  globalThis.__workspaceTest.auth.dismissWelcomeGuide = async () => { if (++saves === 1) throw Error("offline"); };
+  ui = await render(Welcome);
+  const start = () => ui.findAllByType("button").find(item => item.children.includes("Me guider dans le CRM"));
+  await act(async () => start().props.onClick());
+  assert.equal(started, 1);
+  assert.equal(ui.findAllByProps({ role: "alert" }).length, 1);
+  await act(async () => start().props.onClick());
+  assert.equal(started, 2);
 });

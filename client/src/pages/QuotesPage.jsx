@@ -228,7 +228,7 @@ export default function QuotesPage() {
             <h2 className="font-heading text-xl font-semibold text-slate-900">Gestion des devis</h2>
             <p className="text-sm text-slate-500">Crée, envoie et convertis tes devis en factures.</p>
           </div>
-          <button type="button" onClick={openCreateModal} className="btn-primary">
+          <button data-tour="quote-create" type="button" onClick={openCreateModal} className="btn-primary">
             Nouveau devis
           </button>
         </div>
@@ -240,7 +240,7 @@ export default function QuotesPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
-              <thead>
+              <thead data-tour="quotes-list">
                 <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
                   <th className="pb-3">Devis</th>
                   <th className="pb-3">Client</th>

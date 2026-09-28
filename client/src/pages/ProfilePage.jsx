@@ -71,7 +71,7 @@ export default function ProfilePage() {
         <div className="flex flex-wrap items-center gap-5">
           <UserAvatar name={fullName} src={avatarUrl} large />
           <div className="space-y-2">
-            <label className={`btn-secondary gap-2 cursor-pointer ${uploading || saving ? "opacity-50" : ""}`}>
+            <label data-tour="profile-upload" className={`btn-secondary gap-2 cursor-pointer ${uploading || saving ? "opacity-50" : ""}`}>
               <Upload size={16} aria-hidden="true" />
               {uploading ? "Import en cours…" : "Importer une photo ou un logo"}
               <input type="file" aria-label="Photo ou logo du profil" accept="image/png,image/jpeg,image/webp" className="sr-only" disabled={uploading || saving} onChange={handleUpload} />

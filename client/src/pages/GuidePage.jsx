@@ -1,9 +1,11 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth.jsx";
 import { gettingStartedSteps, guideQuestions } from "../lib/gettingStarted.js";
+import { useTour } from "../hooks/useTour.jsx";
 
 export default function GuidePage() {
   const { user } = useAuth();
+  const { startTour } = useTour();
   const steps = gettingStartedSteps(user?.role || "readonly");
   return (
     <div className="space-y-6">
@@ -11,6 +13,10 @@ export default function GuidePage() {
         <h2 className="font-heading text-lg font-semibold text-slate-900">Votre premier parcours dans le CRM</h2>
         <p className="text-sm leading-relaxed text-slate-600">Suivez les étapes à votre rythme. Chaque bouton ouvre le module correspondant ; il ne crée aucune donnée et n’envoie aucun message.</p>
         <p className="text-sm font-semibold text-brand-500">Prospect → Client → Devis → Facture → Paiement</p>
+        <div className="space-y-2">
+          <button type="button" className="btn-primary" onClick={startTour}>Lancer la visite interactive</button>
+          <p className="text-xs text-slate-500">Des repères sur les vrais boutons, étape par étape. Vous pouvez quitter à tout moment.</p>
+        </div>
         <Link to="/dashboard" className="btn-secondary">Revenir au tableau de bord</Link>
       </section>
       <ol className="grid gap-5 md:grid-cols-2">

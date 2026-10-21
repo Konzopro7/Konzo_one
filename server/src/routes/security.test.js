@@ -6,6 +6,7 @@ import pool from "../db.js";
 import pipeline from "./pipeline.js";
 import { handleStripeWebhook } from "./payments.js";
 import billing from "./billing.js";
+import chatbot from "./chatbot.js";
 import { verifyWhatsappWebhook } from "../middleware/verifyWhatsappWebhook.js";
 
 function response() {
@@ -84,6 +85,40 @@ test("WhatsApp checks the exact raw body and fails closed", t => {
   const res = response();
   verifyWhatsappWebhook({ rawBody, headers: {} }, res, () => accepted++);
   assert.equal(res.statusCode, 503);
+});
+
+test("WhatsApp replies reject incomplete setup and demo conversations before sending", async t => {
+  environment(t, {
+    WHATSAPP_ACCESS_TOKEN: null,
+    WHATSAPP_PHONE_NUMBER_ID: null,
+    WHATSAPP_APP_SECRET: "app-secret"
+  });
+  let conversation = {
+    id: 7,
+    contact_phone: "15145550100",
+    access_token: null,
+    phone_number_id: null,
+    is_active: true,
+    is_simulation: false
+  };
+  let queryCount = 0;
+  t.mock.method(pool, "query", async () => {
+    queryCount += 1;
+    return { rows: [conversation] };
+  });
+  const route = chatbot.stack.find(layer => layer.route?.path === "/conversations/:id/messages" && layer.route.methods.post).route;
+  const request = { params: { id: "7" }, body: { body: "Bonjour" }, user: { id: 1, agencyId: 2 } };
+  const incomplete = response();
+  await route.stack.at(-1).handle(request, incomplete, error => { throw error; });
+  assert.equal(incomplete.statusCode, 503);
+  assert.match(incomplete.body.message, /Aucun message/);
+
+  conversation = { ...conversation, access_token: "token", phone_number_id: "123", is_simulation: true };
+  const demo = response();
+  await route.stack.at(-1).handle(request, demo, error => { throw error; });
+  assert.equal(demo.statusCode, 409);
+  assert.match(demo.body.message, /simulation/);
+  assert.equal(queryCount, 2);
 });
 
 for (const method of ["post", "put"]) {

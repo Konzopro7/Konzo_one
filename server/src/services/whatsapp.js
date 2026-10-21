@@ -17,6 +17,13 @@ export function normalizeWhatsappPhone(value) {
   return String(value || "").replace(/[^\d]/g, "");
 }
 
+export function hasWhatsappCredentials(channel) {
+  return Boolean(
+    (channel?.access_token || process.env.WHATSAPP_ACCESS_TOKEN) &&
+    (channel?.phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID)
+  );
+}
+
 export function getWebhookUrl() {
   const apiUrl = (process.env.API_URL || "http://localhost:4000").replace(/\/+$/, "");
   return `${apiUrl}/api/chatbot/whatsapp/webhook`;
@@ -72,15 +79,9 @@ export async function sendWhatsappTextMessage(channel, toPhone, body) {
   const normalizedTo = normalizeWhatsappPhone(toPhone);
 
   if (!accessToken || !phoneNumberId || !normalizedTo) {
-    return {
-      sent: false,
-      status: "simulated",
-      providerMessageId: null,
-      response: {
-        mode: "simulation",
-        reason: "WhatsApp access token, phone number id, or recipient is missing."
-      }
-    };
+    const error = new Error("Connexion WhatsApp incomplète ou destinataire invalide. Aucun message n'a été envoyé.");
+    error.status = 503;
+    throw error;
   }
 
   const response = await fetch(

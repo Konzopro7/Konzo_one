@@ -8,6 +8,7 @@ import { verifyWhatsappWebhook } from "../middleware/verifyWhatsappWebhook.js";
 import {
   extractInboundText,
   getWebhookUrl,
+  hasWhatsappCredentials,
   maskSecret,
   normalizeWhatsappPhone,
   renderAutoReply,
@@ -46,7 +47,7 @@ function parseId(value) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
-function mapChannel(row) {
+function mapChannel(row, canManage = false) {
   return {
     id: row.id,
     provider: row.provider,
@@ -55,7 +56,9 @@ function mapChannel(row) {
     businessAccountId: row.business_account_id,
     accessTokenMasked: maskSecret(row.access_token || process.env.WHATSAPP_ACCESS_TOKEN),
     hasAccessToken: Boolean(row.access_token || process.env.WHATSAPP_ACCESS_TOKEN),
-    verifyToken: row.verify_token,
+    hasPhoneNumberId: Boolean(row.phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID),
+    webhookSignatureReady: Boolean(process.env.WHATSAPP_APP_SECRET),
+    verifyToken: canManage ? row.verify_token : null,
     isActive: Boolean(row.is_active),
     autoReplyEnabled: Boolean(row.auto_reply_enabled),
     autoReplyMessage: row.auto_reply_message,
@@ -73,6 +76,7 @@ function mapConversation(row) {
     lastMessageAt: row.last_message_at,
     lastMessageBody: row.last_message_body,
     lastMessageDirection: row.last_message_direction,
+    isSimulation: Boolean(row.last_message_simulated),
     unreadCount: Number(row.unread_count || 0)
   };
 }
@@ -85,6 +89,7 @@ function mapMessage(row) {
     messageType: row.message_type,
     body: row.body,
     status: row.status,
+    isSimulation: row.status === "simulated" || String(row.provider_message_id || "").startsWith("local-"),
     sentBy: row.sent_by,
     sentByName: row.sent_by_name,
     createdAt: row.created_at
@@ -248,6 +253,7 @@ async function autoReplyIfEnabled(channel, conversation, inboundBody, contactNam
   if (!channel.auto_reply_enabled) {
     return null;
   }
+  if (!simulateOnly && !hasWhatsappCredentials(channel)) return null;
 
   const body = renderAutoReply(channel.auto_reply_message, {
     contactName,
@@ -378,7 +384,7 @@ router.use(requireAuth);
 router.get("/settings", async (req, res, next) => {
   try {
     const channel = await ensureChannel(req.user.agencyId);
-    return res.json(mapChannel(channel));
+    return res.json(mapChannel(channel, req.user.role === "admin"));
   } catch (error) {
     return next(error);
   }
@@ -438,7 +444,7 @@ router.put("/settings", requireRole("admin"), async (req, res, next) => {
       ]
     );
 
-    return res.json(mapChannel(rows[0]));
+    return res.json(mapChannel(rows[0], true));
   } catch (error) {
     return next(error);
   }
@@ -455,6 +461,10 @@ router.get("/conversations", async (req, res, next) => {
         c.last_message_at,
         last_msg.body AS last_message_body,
         last_msg.direction AS last_message_direction,
+        (SELECT inbound.provider_message_id LIKE 'local-%'
+         FROM chatbot_messages inbound
+         WHERE inbound.conversation_id = c.id AND inbound.direction = 'inbound'
+         ORDER BY inbound.created_at DESC, inbound.id DESC LIMIT 1) AS last_message_simulated,
         COUNT(m.id) FILTER (WHERE m.direction = 'inbound' AND m.status = 'received')::INT AS unread_count
       FROM chatbot_conversations c
       LEFT JOIN LATERAL (
@@ -546,7 +556,10 @@ router.post("/conversations/:id/messages", requireRole("admin", "commercial"), a
         c.*,
         ch.phone_number_id,
         ch.access_token,
-        ch.is_active
+        ch.is_active,
+        (SELECT m.provider_message_id LIKE 'local-%'
+         FROM chatbot_messages m WHERE m.conversation_id = c.id AND m.direction = 'inbound'
+         ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS is_simulation
        FROM chatbot_conversations c
        INNER JOIN chatbot_channels ch ON ch.id = c.channel_id
        WHERE c.id = $1 AND c.agency_id = $2`,
@@ -558,15 +571,14 @@ router.post("/conversations/:id/messages", requireRole("admin", "commercial"), a
       return res.status(404).json({ message: "Conversation not found." });
     }
 
-    const hasRealWhatsappConfig = Boolean(
-      conversation.access_token ||
-        process.env.WHATSAPP_ACCESS_TOKEN ||
-        conversation.phone_number_id ||
-        process.env.WHATSAPP_PHONE_NUMBER_ID
-    );
-
-    if (!conversation.is_active && hasRealWhatsappConfig) {
+    if (!conversation.is_active) {
       return res.status(409).json({ message: "Le canal WhatsApp n'est pas actif." });
+    }
+    if (!hasWhatsappCredentials(conversation) || !process.env.WHATSAPP_APP_SECRET) {
+      return res.status(503).json({ message: "La connexion WhatsApp Meta est incomplète. Aucun message n'a été envoyé." });
+    }
+    if (conversation.is_simulation) {
+      return res.status(409).json({ message: "Cette conversation est une simulation. Utilisez un vrai message reçu pour répondre." });
     }
 
     let sendResult;

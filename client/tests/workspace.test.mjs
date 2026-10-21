@@ -126,6 +126,9 @@ const { default: Quotes } = await import(
 const { default: Invoices } = await import(
   pathToFileURL(await compile(path.join(root, "src/pages/InvoicesPage.jsx")))
 );
+const { default: Messages } = await import(
+  pathToFileURL(await compile(path.join(root, "src/pages/MessagesPage.jsx")))
+);
 const { default: Portal } = await import(
   pathToFileURL(
     await compile(path.join(root, "src/pages/ClientPortalPage.jsx")),
@@ -244,6 +247,39 @@ beforeEach(() => {
       },
     ],
   };
+});
+
+test("WhatsApp page identifies demo messages and disables real replies without Meta setup", async () => {
+  globalThis.__workspaceTest.responses = {
+    "/chatbot/settings": {
+      isActive: true,
+      hasAccessToken: false,
+      hasPhoneNumberId: true,
+      webhookSignatureReady: false
+    },
+    "/chatbot/conversations": [{
+      id: 1,
+      contactName: "Client exemple",
+      contactPhone: "15550000000",
+      isSimulation: true,
+      status: "open",
+      unreadCount: 0
+    }],
+    "/chatbot/conversations/1/messages": [{
+      id: 2,
+      direction: "outbound",
+      body: "Réponse fictive",
+      isSimulation: true,
+      status: "simulated",
+      createdAt: "2026-10-21T12:00:00Z"
+    }]
+  };
+  const ui = await render(Messages);
+  assert.match(JSON.stringify(view.toJSON()), /Connexion Meta incomplète/);
+  assert.match(JSON.stringify(view.toJSON()), /Démonstration/);
+  assert.match(JSON.stringify(view.toJSON()), /Démo/);
+  const sendButton = ui.findAllByType("button").find(button => button.children.includes("Envoyer"));
+  assert.equal(sendButton.props.disabled, true);
 });
 
 test("MFA enrollment verifies the code and waits for recovery-code acknowledgement before signing in", async () => {

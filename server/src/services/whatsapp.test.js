@@ -2,9 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   extractInboundText,
+  hasWhatsappCredentials,
   maskSecret,
   normalizeWhatsappPhone,
-  renderAutoReply
+  renderAutoReply,
+  sendWhatsappTextMessage
 } from "./whatsapp.js";
 
 test("maskSecret hides most of a token", () => {
@@ -32,5 +34,26 @@ test("renderAutoReply replaces chatbot variables", () => {
       message: "Devis"
     }),
     "Bonjour Awa, message recu: Devis"
+  );
+});
+
+test("WhatsApp delivery requires both credentials and never silently simulates", async (t) => {
+  const previousToken = process.env.WHATSAPP_ACCESS_TOKEN;
+  const previousPhoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  delete process.env.WHATSAPP_ACCESS_TOKEN;
+  delete process.env.WHATSAPP_PHONE_NUMBER_ID;
+  t.after(() => {
+    if (previousToken === undefined) delete process.env.WHATSAPP_ACCESS_TOKEN;
+    else process.env.WHATSAPP_ACCESS_TOKEN = previousToken;
+    if (previousPhoneId === undefined) delete process.env.WHATSAPP_PHONE_NUMBER_ID;
+    else process.env.WHATSAPP_PHONE_NUMBER_ID = previousPhoneId;
+  });
+
+  assert.equal(hasWhatsappCredentials({ access_token: "token" }), false);
+  assert.equal(hasWhatsappCredentials({ phone_number_id: "123" }), false);
+  assert.equal(hasWhatsappCredentials({ access_token: "token", phone_number_id: "123" }), true);
+  await assert.rejects(
+    sendWhatsappTextMessage({ access_token: "token" }, "+1 514 555 0100", "Bonjour"),
+    (error) => error.status === 503 && /Aucun message/.test(error.message)
   );
 });

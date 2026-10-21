@@ -44,8 +44,12 @@ La configuration réelle test est vérifiée séparément en créant puis expira
 une session Checkout, sans effectuer de paiement.
 
 La page de facturation annonce explicitement le mode test. Aucune somme réelle
-n'est encaissée avec ces clés. Pour tester un paiement, utiliser les données de
-carte proposées dans la documentation Stripe, jamais une carte réelle.
+n'est encaissée avec ces clés. En production, les nouvelles sessions Checkout
+sont bloquées et les événements test signés sont ignorés : un paiement fictif
+ne doit pas ouvrir un abonnement payant. Les essais gratuits restent disponibles.
+Pour tester un paiement, utiliser les données de carte proposées dans la
+documentation Stripe dans un environnement de développement isolé, jamais une
+carte réelle sur le mode test.
 
 ## Annulation par le client
 

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { getStripeClient, stripeTestMode } from "../services/stripeClient.js";
+import { assertProductionPaymentsReady, getStripeClient, realPaymentsReady, stripeTestMode } from "../services/stripeClient.js";
 import { confirmStripeCheckout } from "../services/stripeSubscriptions.js";
 import { createBillingPortalSession } from "../services/billingPortal.js";
 import { query } from "../db.js";
@@ -104,6 +104,7 @@ router.get("/status", async (req, res, next) => {
       newsletterOffer: await newsletterStatus(req.user),
       stripeEnabled: Boolean(process.env.STRIPE_SECRET_KEY),
       stripeTestMode: stripeTestMode(),
+      realPaymentsReady: realPaymentsReady({ subscription: true }),
       simulated:
         process.env.NODE_ENV !== "production" &&
         (!process.env.STRIPE_SECRET_KEY ||
@@ -126,6 +127,7 @@ router.post("/checkout-session", requireRole("admin"), async (req, res, next) =>
     }
 
     const payload = parsed.data;
+    assertProductionPaymentsReady({ subscription: true });
     const plans = getPlanCatalog();
     const targetPlan = plans[payload.planTier];
     if (!targetPlan) {
@@ -241,6 +243,7 @@ router.post("/checkout-session", requireRole("admin"), async (req, res, next) =>
       sessionId: session.id
     });
   } catch (error) {
+    if (error.status) return res.status(error.status).json({ message: error.message, code: error.code });
     return next(error);
   }
 });
@@ -251,6 +254,7 @@ router.post("/confirm-checkout", requireRole("admin"), async (req, res, next) =>
     if (!parsed.success) {
       return res.status(400).json({ message: "Invalid Stripe session." });
     }
+    assertProductionPaymentsReady({ subscription: true });
 
     const stripe = getStripeClient();
     if (!stripe) {
@@ -265,7 +269,7 @@ router.post("/confirm-checkout", requireRole("admin"), async (req, res, next) =>
       subscription: mapSubscriptionPayload(updated)
     });
   } catch (error) {
-    if (error.status) return res.status(error.status).json({ message: error.message });
+    if (error.status) return res.status(error.status).json({ message: error.message, code: error.code });
     return next(error);
   }
 });

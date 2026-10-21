@@ -4,6 +4,7 @@ import { Router } from "express";
 import { query, withTransaction } from "../db.js";
 import { generateInvoiceNumber } from "../utils/docNumbers.js";
 import { buildBusinessPdf } from "../services/pdf.js";
+import { realPaymentsReady } from "../services/stripeClient.js";
 
 const router = Router();
 
@@ -295,6 +296,7 @@ router.get("/invoices/:token", async (req, res, next) => {
     return res.json({
       type: "invoice",
       invoice,
+      onlinePaymentAvailable: process.env.NODE_ENV !== "production" || realPaymentsReady(),
       agency: {
         name: settings?.agency_name || PRODUCT_NAME,
         email: settings?.agency_email || null,

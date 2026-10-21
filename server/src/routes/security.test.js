@@ -5,6 +5,7 @@ import Stripe from "stripe";
 import pool from "../db.js";
 import pipeline from "./pipeline.js";
 import { handleStripeWebhook } from "./payments.js";
+import billing from "./billing.js";
 import { verifyWhatsappWebhook } from "../middleware/verifyWhatsappWebhook.js";
 
 function response() {
@@ -44,6 +45,22 @@ test("Stripe accepts an authentic signed event without making network calls", as
   const res = response();
   await handleStripeWebhook({ headers: { "stripe-signature": signature }, body: Buffer.from(body) }, res);
   assert.deepEqual(res.body, { received: true });
+});
+
+test("production ignores signed test payments and refuses test subscription checkout", async t => {
+  environment(t, { NODE_ENV: "production", STRIPE_MODE: "test", STRIPE_SECRET_KEY: "sk_test_fixture", STRIPE_WEBHOOK_SECRET: "whsec_fixture" });
+  t.mock.method(pool, "query", () => { throw new Error("Unexpected database access"); });
+  const body = JSON.stringify({ id: "evt_test_payment", type: "checkout.session.completed", livemode: false, data: { object: { mode: "subscription" } } });
+  const signature = Stripe.webhooks.generateTestHeaderString({ payload: body, secret: "whsec_fixture" });
+  const webhook = response();
+  await handleStripeWebhook({ headers: { "stripe-signature": signature }, body: Buffer.from(body) }, webhook);
+  assert.deepEqual(webhook.body, { received: true, ignored: "payments_not_ready" });
+
+  const route = billing.stack.find(layer => layer.route?.path === "/checkout-session").route;
+  const checkout = response();
+  await route.stack.at(-1).handle({ body: { planTier: "pro" }, user: { agencyId: 1 } }, checkout, error => { throw error; });
+  assert.equal(checkout.statusCode, 503);
+  assert.equal(checkout.body.code, "PAYMENTS_NOT_READY");
 });
 
 test("WhatsApp checks the exact raw body and fails closed", t => {

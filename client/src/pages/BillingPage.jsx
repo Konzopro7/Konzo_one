@@ -227,8 +227,15 @@ export default function BillingPage() {
       {status?.stripeTestMode && (
         <section className="card">
           <p role="status" className="text-sm text-amber-700">
-            Stripe est en mode test. Les paiements sont simulés et aucun montant
-            réel n’est encaissé.
+            Stripe est en mode test. Aucun paiement réel ne peut être encaissé ;
+            l’activation payante est indisponible tant que le service n’est pas configuré.
+          </p>
+        </section>
+      )}
+      {import.meta.env.PROD && !status?.realPaymentsReady && !status?.stripeTestMode && (
+        <section className="card">
+          <p role="status" className="text-sm text-amber-700">
+            La souscription payante en ligne est temporairement indisponible. Votre essai gratuit reste accessible jusqu’à sa date de fin.
           </p>
         </section>
       )}
@@ -354,6 +361,7 @@ export default function BillingPage() {
             className="btn-primary mt-5 w-full"
             disabled={
               !isAdmin ||
+              (import.meta.env.PROD && !status?.realPaymentsReady) ||
               Boolean(processingPlan) ||
               (subscriptionStatus === "active" && currentPlan === "pro")
             }
@@ -392,6 +400,7 @@ export default function BillingPage() {
             className="btn-primary mt-5 w-full"
             disabled={
               !isAdmin ||
+              (import.meta.env.PROD && !status?.realPaymentsReady) ||
               Boolean(processingPlan) ||
               (subscriptionStatus === "active" && currentPlan === "premium")
             }

@@ -49,6 +49,7 @@ export default function InvoicesPage() {
   const [invoices, setInvoices] = useState([]);
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [onlinePaymentAvailable, setOnlinePaymentAvailable] = useState(!import.meta.env.PROD);
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [activeInvoiceId, setActiveInvoiceId] = useState(null);
@@ -81,6 +82,13 @@ export default function InvoicesPage() {
     return () => {
       active = false;
     };
+  }, []);
+
+  useEffect(() => {
+    if (!import.meta.env.PROD) return;
+    api.get("/payments/availability")
+      .then(({ data }) => setOnlinePaymentAvailable(data.realPaymentsReady === true))
+      .catch(() => setOnlinePaymentAvailable(false));
   }, []);
 
   function openCreateModal() {
@@ -275,6 +283,14 @@ export default function InvoicesPage() {
         </div>
       </section>
 
+      {!onlinePaymentAvailable && (
+        <section className="card">
+          <p role="status" className="text-sm text-amber-700">
+            Le paiement par carte est temporairement indisponible. Les factures et leurs PDF restent accessibles.
+          </p>
+        </section>
+      )}
+
       <section className="card overflow-hidden">
         {loadError ? (
           <p role="alert" className="text-sm text-slate-600">
@@ -409,7 +425,7 @@ export default function InvoicesPage() {
                                 }
                                 title="Payer via Stripe"
                                 aria-label="Payer via Stripe"
-                                disabled={busy}
+                                disabled={busy || !onlinePaymentAvailable}
                               >
                                 <CreditCard size={14} />
                               </button>

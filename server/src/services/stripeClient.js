@@ -5,6 +5,19 @@ let clientKey;
 export function stripeTestMode() {
   return /^(sk|rk)_test_/.test(process.env.STRIPE_SECRET_KEY || "");
 }
+export function realPaymentsReady({ subscription = false } = {}) {
+  return /^(sk|rk)_live_/.test(process.env.STRIPE_SECRET_KEY || "") &&
+    process.env.STRIPE_MODE === "live" &&
+    Boolean(process.env.STRIPE_WEBHOOK_SECRET) &&
+    (!subscription || Boolean(process.env.STRIPE_PRICE_PRO_MONTHLY && process.env.STRIPE_PRICE_PREMIUM_MONTHLY));
+}
+export function assertProductionPaymentsReady(options) {
+  if (process.env.NODE_ENV !== "production" || realPaymentsReady(options)) return;
+  const error = new Error("Le paiement en ligne n'est pas encore disponible. Contactez le support.");
+  error.status = 503;
+  error.code = "PAYMENTS_NOT_READY";
+  throw error;
+}
 export function getStripeClient() {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) return null;

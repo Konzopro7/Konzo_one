@@ -293,13 +293,18 @@ export default function ClientPortalPage() {
               type="button"
               className="btn-primary gap-2"
               onClick={() => runAction(payInvoice)}
-              disabled={processing}
+              disabled={processing || payload?.onlinePaymentAvailable === false}
             >
               <ExternalLink size={15} />
               {processing ? "Traitement..." : "Payer la facture"}
             </button>
           ) : null}
         </section>
+        {!isQuote && currentDoc.status !== "paid" && payload?.onlinePaymentAvailable === false ? (
+          <p role="status" className="text-sm text-amber-700">
+            Le paiement par carte est temporairement indisponible. Contactez l’émetteur de la facture pour convenir d’un autre mode de paiement.
+          </p>
+        ) : null}
       </main>
     </div>
   );

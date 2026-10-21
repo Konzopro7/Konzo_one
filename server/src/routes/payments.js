@@ -4,6 +4,8 @@ import {
   getStripeClient,
   stripeId,
   stripeTestMode,
+  realPaymentsReady,
+  assertProductionPaymentsReady,
 } from "../services/stripeClient.js";
 import {
   syncStripeSubscription,
@@ -100,6 +102,7 @@ async function createCheckoutSession({
   successUrl,
   cancelUrl,
 }) {
+  assertProductionPaymentsReady();
   const stripe = getStripeClient();
   if (!stripe) {
     const error = new Error("Stripe is not configured.");
@@ -210,6 +213,10 @@ export async function handleStripeWebhook(req, res) {
     ) {
       return res.status(400).send("stripe_mode_mismatch");
     }
+    // Test transactions must never activate paid access on a public deployment.
+    if (process.env.NODE_ENV === "production" && !realPaymentsReady()) {
+      return res.json({ received: true, ignored: "payments_not_ready" });
+    }
     const supported = [
       "checkout.session.completed",
       "checkout.session.async_payment_succeeded",
@@ -276,8 +283,13 @@ router.get("/status", requireAuth, async (req, res) => {
   return res.json({
     enabled: Boolean(process.env.STRIPE_SECRET_KEY),
     testMode: stripeTestMode(),
+    realPaymentsReady: realPaymentsReady(),
     publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || null,
   });
+});
+
+router.get("/availability", (req, res) => {
+  res.set("Cache-Control", "no-store").json({ realPaymentsReady: realPaymentsReady() });
 });
 
 router.post(

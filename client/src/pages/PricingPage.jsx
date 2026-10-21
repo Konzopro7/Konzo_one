@@ -1,7 +1,9 @@
 import { PRODUCT_NAME } from "../../../shared/brand.mjs";
+import { useEffect, useState } from "react";
 import { Check, Rocket, ShieldCheck, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 import { formatCurrency } from "../lib/format.js";
+import api from "../lib/api.js";
 
 const plans = [
   {
@@ -48,7 +50,7 @@ function PlanCard({ plan }) {
     >
       {plan.highlight && (
         <span className="absolute right-4 top-4 rounded-full bg-brand-500 px-3 py-1 text-xs font-semibold text-white">
-          Le plus choisi
+          Premium
         </span>
       )}
 
@@ -78,6 +80,14 @@ function PlanCard({ plan }) {
 
 export default function PricingPage() {
   const logoSrc = `${import.meta.env.BASE_URL}logo.svg`;
+  const [paymentsReady, setPaymentsReady] = useState(!import.meta.env.PROD);
+
+  useEffect(() => {
+    if (!import.meta.env.PROD) return;
+    api.get("/payments/availability")
+      .then(({ data }) => setPaymentsReady(data.realPaymentsReady === true))
+      .catch(() => setPaymentsReady(false));
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -148,6 +158,7 @@ export default function PricingPage() {
             <p className="mt-2 text-sm text-slate-600">
               Choisis ton niveau, active l'essai gratuit puis passe en abonnement mensuel.
             </p>
+            {!paymentsReady && <p role="status" className="mt-3 text-sm text-amber-700">Les essais gratuits sont ouverts. La souscription payante en ligne sera disponible après l’activation des paiements réels.</p>}
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">

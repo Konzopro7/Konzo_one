@@ -16,9 +16,11 @@
 
 ## Configuration et limites à connaître
 
-Stripe est actuellement en **mode test** : les abonnements et paiements test ne sont pas des encaissements réels. Le passage en production financière nécessite des clés/prix/webhooks du mode réel et la réconciliation des comptes test.
+Stripe est actuellement en **mode test** : les abonnements et paiements test ne sont pas des encaissements réels. En production, le code refuse désormais les nouvelles sessions de paiement et ignore les événements test afin qu'une transaction fictive n'active pas un accès payant. Les essais gratuits continuent. Le passage en production financière nécessite `STRIPE_MODE=live`, une clé secrète live, le secret du webhook live et les deux prix live. Les comptes activés auparavant par des paiements test doivent être recensés et réconciliés sans supprimer leurs données.
 
 L’envoi réel des emails, des liens de réinitialisation et des documents nécessite un SMTP opérationnel. Sans configuration, le système doit annoncer l’indisponibilité ; ne pas promettre une livraison.
+
+Avant d'ouvrir les ventes : vérifier sur le VPS la configuration SMTP par l'envoi et la réception d'un lien de réinitialisation, tester un abonnement et son webhook en mode réel avec un petit paiement autorisé, vérifier le reçu et l'annulation, puis confirmer une sauvegarde restaurable hors VPS. Les tests PostgreSQL ignorés sur un poste sans `TEST_DATABASE_URL` s'exécutent dans la CI GitHub avec une base PostgreSQL isolée.
 
 Le taux de taxe des documents demeure celui saisi par l’agence. Cette amélioration ne constitue pas un moteur de taxes provinciales ni une déclaration de conformité juridique.
 

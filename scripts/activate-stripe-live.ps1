@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$VpsHost = '76.13.115.72',
     [string]$SshUser = 'root'
 )
@@ -17,8 +17,15 @@ function Read-PrivateValue([string]$prompt, [string]$pattern) {
     } finally {
         [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer)
     }
+    $value = $value.Trim().Trim([char[]]@('"', "'"))
+    if ($value -match '\.\.\.|…|^\*+$') {
+        throw "La valeur de $prompt est masquee dans Stripe. Copiez la cle complete lors de sa creation ou renouvelez-la."
+    }
+    if ($value -match '^(sk|rk|pk)_test_') {
+        throw "La valeur de $prompt est une cle de test. Il faut une cle Live."
+    }
     if ($value -notmatch $pattern) {
-        throw "Format incorrect pour $prompt"
+        throw "Format incorrect pour $prompt. Copiez uniquement la valeur complete, sans espace ni libelle."
     }
     return $value
 }

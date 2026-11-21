@@ -18,6 +18,15 @@ function Read-PrivateValue([string]$prompt, [string]$pattern) {
         [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer)
     }
     $value = $value.Trim().Trim([char[]]@('"', "'"))
+    if (-not $value) {
+        throw "Aucune valeur saisie pour $prompt. Copiez la cle dans Stripe, revenez ici et collez-la avec Ctrl+V."
+    }
+    if ($pattern.StartsWith('^(sk|rk)_live_') -and $value -match '^pk_live_') {
+        throw "Vous avez colle la cle publique pk_live_. Le premier champ demande la cle secrete sk_live_ ou rk_live_."
+    }
+    if ($pattern.StartsWith('^(sk|rk)_live_') -and $value -match '^whsec_') {
+        throw "Vous avez colle le secret du webhook. Le premier champ demande la cle secrete sk_live_ ou rk_live_."
+    }
     if ($value -match '\.\.\.|…|^\*+$') {
         throw "La valeur de $prompt est masquee dans Stripe. Copiez la cle complete lors de sa creation ou renouvelez-la."
     }
@@ -25,7 +34,7 @@ function Read-PrivateValue([string]$prompt, [string]$pattern) {
         throw "La valeur de $prompt est une cle de test. Il faut une cle Live."
     }
     if ($value -notmatch $pattern) {
-        throw "Format incorrect pour $prompt. Copiez uniquement la valeur complete, sans espace ni libelle."
+        throw "Format incorrect pour $prompt (longueur $($value.Length)). Copiez uniquement la valeur complete, sans espace ni libelle."
     }
     return $value
 }
